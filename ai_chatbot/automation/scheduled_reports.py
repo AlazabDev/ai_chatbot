@@ -13,6 +13,7 @@ blocking the scheduler and to isolate failures.
 from __future__ import annotations
 
 from datetime import datetime
+from html import escape
 
 import frappe
 from frappe.utils import get_datetime, now_datetime
@@ -223,10 +224,12 @@ def _execute_single_report(report_name: str) -> None:
 
 		# For PDF-only, send a minimal email body with the PDF attached
 		if output_format == "PDF":
+			safe_report_name = escape(str(report.report_name or ""))
+			safe_company = escape(str(report.company or ""))
 			html_message = (
-				f"<p>Please find the attached report: <b>{report.report_name}</b></p>"
+				f"<p>Please find the attached report: <b>{safe_report_name}</b></p>"
 				f"<p style='color: #7f8c8d; font-size: 12px;'>"
-				f"Generated on {frappe.utils.nowdate()} for {report.company}.</p>"
+				f"Generated on {frappe.utils.nowdate()} for {safe_company}.</p>"
 			)
 
 		# Dispatch email notification
