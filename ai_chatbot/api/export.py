@@ -24,6 +24,7 @@ from ai_chatbot.automation.formatters import (
 	format_html_email,
 )
 from ai_chatbot.core.logger import log_error
+from ai_chatbot.core.permissions import conversation_has_permission
 
 # ---------------------------------------------------------------------------
 # Single message export
@@ -46,7 +47,7 @@ def export_message_pdf(message_name: str) -> dict:
 
 		# Only the owning user may export their own messages
 		conversation = frappe.get_doc("Chatbot Conversation", msg.conversation)
-		if conversation.user != frappe.session.user:
+		if not conversation_has_permission(conversation, user=frappe.session.user, permission_type="read"):
 			frappe.throw("You do not have permission to export this message.", frappe.PermissionError)
 
 		# Build HTML for the single message
@@ -89,7 +90,7 @@ def export_message_pdf(message_name: str) -> dict:
 			f"PDF export failed for message {message_name}: {e!s}",
 			title="PDF Export",
 		)
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": "The PDF could not be generated."}
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +111,7 @@ def export_conversation_pdf(conversation_id: str) -> dict:
 	"""
 	try:
 		conversation = frappe.get_doc("Chatbot Conversation", conversation_id)
-		if conversation.user != frappe.session.user:
+		if not conversation_has_permission(conversation, user=frappe.session.user, permission_type="read"):
 			frappe.throw("You do not have permission to export this conversation.", frappe.PermissionError)
 
 		messages = frappe.get_all(
@@ -159,7 +160,7 @@ def export_conversation_pdf(conversation_id: str) -> dict:
 			f"PDF export failed for conversation {conversation_id}: {e!s}",
 			title="PDF Export",
 		)
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": "The PDF could not be generated."}
 
 
 # ---------------------------------------------------------------------------
