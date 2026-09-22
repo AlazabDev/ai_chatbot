@@ -13,7 +13,7 @@ from ai_chatbot.api.history import get_conversation_history
 from ai_chatbot.api.validation import bounded_int, clean_title, validate_message_payload
 from ai_chatbot.core.ai_utils import extract_response, extract_tool_info, safe_json
 from ai_chatbot.core.audit import log_audit_event
-from ai_chatbot.core.exceptions import ChatbotError
+from ai_chatbot.core.exceptions import ChatbotError, RequestValidationError
 from ai_chatbot.core.logger import log_error, log_info, log_warning
 from ai_chatbot.core.prompts import build_system_prompt, inject_recall_context, inject_routing_context
 from ai_chatbot.core.token_optimizer import optimize_history
@@ -38,7 +38,7 @@ def _user_facing_error(error: Exception) -> str:
 	a generic notice — the original exception is logged separately, so no
 	information is lost; it just doesn't get rendered to the end user.
 	"""
-	if isinstance(error, (ChatbotError, frappe.ValidationError, frappe.PermissionError)):
+	if isinstance(error, (ChatbotError, frappe.PermissionError)):
 		return str(error)
 	return _FALLBACK_USER_ERROR
 
@@ -71,7 +71,7 @@ def create_conversation(title: str, ai_provider: str = "OpenAI", foundry_agent: 
 				as_dict=True,
 			)
 			if not agent or not agent.enabled or not (agent.foundry_assistant_id or "").strip():
-				frappe.throw("The selected Foundry Agent is not available or is not configured.")
+				raise RequestValidationError("The selected Foundry Agent is not available or is not configured.")
 
 		doc_fields = {
 			"doctype": "Chatbot Conversation",
@@ -227,7 +227,11 @@ def send_message(
 		is_retry = is_retry in (True, "true", "True", "1", 1)
 		if is_retry:
 			attachments = None
-		message, attachments = validate_message_payload(message, attachments)
+		message, attachments = validate_message_payload(
+			message,
+			attachments,
+			conversation_id=conversation_id,
+		)
 
 		log_info("Incoming message", conversation_id=conversation_id, stream=stream)
 
