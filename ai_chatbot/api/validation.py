@@ -5,8 +5,9 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 
-import frappe
+from ai_chatbot.core.exceptions import RequestValidationError
 
 MAX_MESSAGE_CHARS = 20_000
 MAX_TITLE_CHARS = 200
@@ -33,7 +34,7 @@ def clean_title(title: str | None) -> str:
 	return title
 
 
-def validate_message_payload(message: str | None, attachments=None) -> tuple[str, str | None]:
+def validate_message_payload(message: str | None, attachments=None, conversation_id: str | None = None) -> tuple[str, str | None]:
 	"""Validate message text and return canonical attachment JSON.
 
 	Only local Frappe file URLs are accepted. Client-only fields and arbitrary
@@ -41,62 +42,71 @@ def validate_message_payload(message: str | None, attachments=None) -> tuple[str
 	"""
 	message = "" if message is None else str(message)
 	if len(message) > MAX_MESSAGE_CHARS:
-		frappe.throw(
-			f"Message exceeds the maximum length of {MAX_MESSAGE_CHARS:,} characters.",
-			frappe.ValidationError,
+		raise RequestValidationError(
+			f"Message exceeds the maximum length of {MAX_MESSAGE_CHARS:,} characters."
 		)
 
 	if not attachments:
 		if not message.strip():
-			frappe.throw("Message cannot be empty.", frappe.ValidationError)
+			raise RequestValidationError("Message cannot be empty.")
 		return message, None
 
 	if isinstance(attachments, str):
 		if len(attachments) > MAX_ATTACHMENT_METADATA_CHARS:
-			frappe.throw("Attachment metadata is too large.", frappe.ValidationError)
+			raise RequestValidationError("Attachment metadata is too large.")
 		try:
 			attachments = json.loads(attachments)
 		except (json.JSONDecodeError, TypeError):
-			frappe.throw("Invalid attachment metadata.", frappe.ValidationError)
+			raise RequestValidationError("Invalid attachment metadata.")
 
 	if not isinstance(attachments, list):
-		frappe.throw("Attachments must be a list.", frappe.ValidationError)
+		raise RequestValidationError("Attachments must be a list.")
 	if len(attachments) > MAX_ATTACHMENTS:
-		frappe.throw(
-			f"A maximum of {MAX_ATTACHMENTS} attachments is allowed per message.",
-			frappe.ValidationError,
+		raise RequestValidationError(
+			f"A maximum of {MAX_ATTACHMENTS} attachments is allowed per message."
 		)
 
 	canonical = []
 	for index, att in enumerate(attachments, start=1):
 		if not isinstance(att, dict):
-			frappe.throw(f"Attachment {index} is invalid.", frappe.ValidationError)
+			raise RequestValidationError(f"Attachment {index} is invalid.")
 
 		file_url = str(att.get("file_url") or "").strip()
 		if not file_url.startswith(("/private/files/", "/files/")):
-			frappe.throw(f"Attachment {index} has an invalid file URL.", frappe.ValidationError)
+			raise RequestValidationError(f"Attachment {index} has an invalid file URL.")
 
 		# Resolve the File now so inaccessible/private files are rejected before
 		# their metadata is persisted into a conversation.
 		from ai_chatbot.idp.extractors.base import _get_file_doc
 
 		file_doc = _get_file_doc(file_url)
+		if conversation_id and (
+			file_doc.attached_to_doctype != "Chatbot Conversation"
+			or file_doc.attached_to_name != conversation_id
+		):
+			raise RequestValidationError(
+				f"Attachment {index} does not belong to this conversation."
+			)
+
 		try:
-			size = max(0, int(att.get("size") or file_doc.file_size or 0))
-		except (TypeError, ValueError):
 			size = max(0, int(file_doc.file_size or 0))
+		except (TypeError, ValueError):
+			size = 0
+
+		mime_type = mimetypes.guess_type(str(file_doc.file_name or file_doc.file_url))[0] or "application/octet-stream"
+		is_image = mime_type in {"image/jpeg", "image/png", "image/gif", "image/webp"}
 
 		canonical.append(
 			{
 				"file_url": file_doc.file_url,
 				"file_name": str(file_doc.file_name or file_url.rsplit("/", 1)[-1])[:255],
-				"mime_type": str(att.get("mime_type") or "application/octet-stream")[:255],
+				"mime_type": mime_type,
 				"size": size,
-				"is_image": bool(att.get("is_image")),
+				"is_image": is_image,
 			}
 		)
 
 	if not message.strip() and not canonical:
-		frappe.throw("Message cannot be empty.", frappe.ValidationError)
+		raise RequestValidationError("Message cannot be empty.")
 
 	return message, json.dumps(canonical, separators=(",", ":"))
