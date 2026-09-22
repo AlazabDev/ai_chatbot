@@ -230,8 +230,10 @@ def _build_conversation_html(
 			body_parts.append(_assistant_block(html_body, timestamp))
 
 	body_html = "\n".join(body_parts)
-	subtitle = f" — {company}" if company else ""
-	today = nowdate()
+	safe_title = _escape_html(str(title or ""))
+	safe_company = _escape_html(str(company or ""))
+	subtitle = f" — {safe_company}" if safe_company else ""
+	today = _escape_html(str(nowdate()))
 
 	from ai_chatbot.automation.formatters import _PDF_STYLE_BLOCK
 
@@ -247,7 +249,7 @@ font-size: 14px; line-height: 1.6; color: #333; text-align: left; max-width: 800
 
 <div style="background-color: #f8f9fa; border-bottom: 3px solid #4a90d9; padding: 20px; \
 margin-bottom: 20px; border-radius: 4px 4px 0 0;">
-<h2 style="margin: 0 0 5px; color: #2c3e50; text-align: left;">{title}</h2>
+<h2 style="margin: 0 0 5px; color: #2c3e50; text-align: left;">{safe_title}</h2>
 <p style="margin: 0; color: #7f8c8d; font-size: 14px;">{today}{subtitle}</p>
 </div>
 
@@ -264,8 +266,9 @@ color: #95a5a6; font-size: 12px;">
 
 def _user_block(content: str, timestamp: str) -> str:
 	"""Render a user message block for the conversation PDF."""
+	safe_timestamp = _escape_html(str(timestamp or ""))
 	ts_html = (
-		f"<span style='font-size: 11px; color: #95a5a6; margin-left: 10px;'>{timestamp}</span>"
+		f"<span style='font-size: 11px; color: #95a5a6; margin-left: 10px;'>{safe_timestamp}</span>"
 		if timestamp
 		else ""
 	)
@@ -281,8 +284,9 @@ def _user_block(content: str, timestamp: str) -> str:
 
 def _assistant_block(html_content: str, timestamp: str) -> str:
 	"""Render an assistant message block for the conversation PDF."""
+	safe_timestamp = _escape_html(str(timestamp or ""))
 	ts_html = (
-		f"<span style='font-size: 11px; color: #95a5a6; margin-left: 10px;'>{timestamp}</span>"
+		f"<span style='font-size: 11px; color: #95a5a6; margin-left: 10px;'>{safe_timestamp}</span>"
 		if timestamp
 		else ""
 	)
