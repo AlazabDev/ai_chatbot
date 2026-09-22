@@ -275,6 +275,6 @@ const handleSearchResultClick = (conversation) => {
 }
 
 const openSettings = () => {
-  window.open('/app/chatbot-settings', '_blank')
+  window.open('/app/chatbot-settings', '_blank', 'noopener,noreferrer')
 }
 </script>
