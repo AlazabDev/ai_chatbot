@@ -4,8 +4,8 @@
 Read-only Data Provider for AI Chatbot Tools
 
 Generic query helpers that auto-inject company filters and use Frappe ORM.
-All tool modules should use these helpers instead of direct frappe.get_all
-or raw SQL to ensure consistent multi-company filtering.
+All tool modules should use these helpers instead of permission-bypassing
+queries to ensure consistent multi-company filtering and User Permissions.
 """
 
 import frappe
@@ -47,7 +47,7 @@ def get_documents(
 
 	limit = min(cint(limit) or DEFAULT_QUERY_LIMIT, MAX_QUERY_LIMIT)
 
-	return frappe.get_all(
+	return frappe.get_list(
 		doctype,
 		filters=filters,
 		fields=fields or ["name"],
@@ -91,7 +91,13 @@ def get_count(doctype, filters=None, company=None):
 	if _doctype_has_field(doctype, "company"):
 		filters["company"] = company
 
-	return frappe.db.count(doctype, filters)
+	rows = frappe.get_list(
+		doctype,
+		filters=filters,
+		fields=["count(name) as count"],
+		limit_page_length=1,
+	)
+	return int(rows[0].get("count") or 0) if rows else 0
 
 
 def get_list(doctype, filters=None, fields=None, company=None, order_by=None, limit=None):
