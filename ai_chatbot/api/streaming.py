@@ -120,6 +120,7 @@ def _run_streaming_job(conversation_id: str, stream_id: str, ai_provider: str, u
 	This runs in a background worker (or inline in dev mode via now=True).
 	Publishes tokens via frappe.publish_realtime as they arrive.
 	"""
+	provider = None
 	try:
 		# Set conversation context for session tools
 		frappe.flags.current_conversation_id = conversation_id
@@ -366,7 +367,7 @@ def _run_streaming_job(conversation_id: str, stream_id: str, ai_provider: str, u
 			"error",
 			conversation=conversation_id,
 			provider=ai_provider,
-			model=provider.model if provider else None,
+			model=provider.model if provider is not None else None,
 			status=error_status,
 			error_message=str(e),
 			user=user,
