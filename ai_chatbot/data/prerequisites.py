@@ -87,7 +87,7 @@ def detect_prerequisites(doctype: str, values: dict, company: str | None = None)
 	}
 
 
-def execute_prerequisites(prerequisites: dict, company: str | None = None) -> dict:
+def execute_prerequisites(prerequisites: dict, company: str | None = None, *, commit=True) -> dict:
 	"""Create missing master records in dependency order.
 
 	Order: UOMs → Parties → Items  (Items depend on UOM existing).
@@ -138,7 +138,8 @@ def execute_prerequisites(prerequisites: dict, company: str | None = None) -> di
 			created.append(f"Item: {result_name}")
 			name_map.setdefault("item_code", {})[item["value"]] = result_name
 
-		frappe.db.commit()
+		if commit:
+			frappe.db.commit()
 		return {
 			"success": True,
 			"created": created,
