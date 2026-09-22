@@ -107,8 +107,11 @@ def validate_link_fields(doctype, values, company=None):
 			if not value:
 				continue
 
-			# Exact match — OK
+			# Exact match — only valid when the current user can read it.
 			if frappe.db.exists(df.options, value):
+				if check_permission(df.options, "read", value):
+					continue
+				errors.append(f"{df.label or df.fieldname}: you do not have permission to use '{value}'")
 				continue
 
 			# Try fuzzy resolution
@@ -172,8 +175,14 @@ def validate_child_table_items(doctype, values, company=None):
 					if not val:
 						continue
 
-					# Exact match — all good
+					# Exact match — only valid when the current user can read it.
 					if frappe.db.exists(child_df.options, val):
+						if check_permission(child_df.options, "read", val):
+							continue
+						errors.append(
+							f"Row {i} ({df.label or df.fieldname}): "
+							f"you do not have permission to use '{val}'"
+						)
 						continue
 
 					# Fuzzy resolution
@@ -223,12 +232,17 @@ def _resolve_link_value(target_doctype, fieldname, value, company=None):
 	name_field = _NAME_FIELDS.get(target_doctype)
 	if name_field:
 		# Exact match on name field
-		match = frappe.db.get_value(target_doctype, {name_field: value}, "name")
-		if match:
-			return match
+		matches = frappe.get_list(
+			target_doctype,
+			filters={name_field: value},
+			pluck="name",
+			limit_page_length=2,
+		)
+		if len(matches) == 1:
+			return matches[0]
 
 		# LIKE match on name field
-		matches = frappe.get_all(
+		matches = frappe.get_list(
 			target_doctype,
 			filters={name_field: ["like", f"%{value}%"]},
 			fields=["name"],
@@ -238,7 +252,7 @@ def _resolve_link_value(target_doctype, fieldname, value, company=None):
 			return matches[0].name
 
 	# Strategy 2: LIKE search on name field of target DocType
-	matches = frappe.get_all(
+	matches = frappe.get_list(
 		target_doctype,
 		filters={"name": ["like", f"%{value}%"]},
 		fields=["name"],
@@ -297,13 +311,18 @@ def _resolve_account(value: str, company: str | None = None) -> str | None:
 		base_filters["company"] = company
 
 	# Try 1: exact match on account_name
-	match = frappe.db.get_value("Account", {**base_filters, "account_name": core_name}, "name")
-	if match:
-		return match
+	matches = frappe.get_list(
+		"Account",
+		filters={**base_filters, "account_name": core_name},
+		pluck="name",
+		limit_page_length=2,
+	)
+	if len(matches) == 1:
+		return matches[0]
 
 	# Try 2: account_name contains the core name
 	# (e.g., "Input Tax IGST" contains "IGST")
-	matches = frappe.get_all(
+	matches = frappe.get_list(
 		"Account",
 		filters={**base_filters, "account_name": ["like", f"%{core_name}%"]},
 		fields=["name"],
