@@ -388,38 +388,35 @@ def _store_pending_confirmation(confirmation_id, payload):
 
 	expires_at = add_to_date(now_datetime(), seconds=_CONFIRMATION_TTL).isoformat()
 	payload["expires_at"] = expires_at
+	payload["user"] = frappe.session.user
 
 	key = f"{_CACHE_PREFIX}{confirmation_id}"
 	frappe.cache().set_value(key, json.dumps(payload, default=str), expires_in_sec=_CONFIRMATION_TTL)
 
 
-def load_pending_confirmation(confirmation_id):
-	"""Load a pending confirmation payload from Redis.
-
-	Returns None if the confirmation has expired or doesn't exist.
-	Does NOT delete the entry (allows re-reads for display).
-
-	Args:
-		confirmation_id: UUID string.
-
-	Returns:
-		Dict payload or None.
-	"""
+def load_pending_confirmation(confirmation_id, user=None):
+	"""Load a pending confirmation payload and enforce token ownership."""
 	key = f"{_CACHE_PREFIX}{confirmation_id}"
 	data = frappe.cache().get_value(key)
 	if not data:
 		return None
-	return json.loads(data) if isinstance(data, str) else data
+
+	payload = json.loads(data) if isinstance(data, str) else data
+	current_user = user or frappe.session.user
+	stored_user = payload.get("user")
+	if not stored_user or stored_user != current_user:
+		frappe.throw("You do not have permission to use this confirmation.", frappe.PermissionError)
+	return payload
 
 
-def delete_pending_confirmation(confirmation_id):
-	"""Delete a pending confirmation from Redis.
-
-	Args:
-		confirmation_id: UUID string.
-	"""
+def delete_pending_confirmation(confirmation_id, user=None):
+	"""Delete a pending confirmation after verifying token ownership."""
+	payload = load_pending_confirmation(confirmation_id, user=user)
+	if not payload:
+		return False
 	key = f"{_CACHE_PREFIX}{confirmation_id}"
 	frappe.cache().delete_value(key)
+	return True
 
 
 # ── Display Field Builders ───────────────────────────────────────────
