@@ -56,7 +56,7 @@ def get_purchase_analytics(from_date=None, to_date=None, company=None):
 	if to_date:
 		list_filters.append(["posting_date", "<=", to_date])
 
-	invoices = frappe.get_all(
+	invoices = frappe.get_list(
 		"Purchase Invoice",
 		filters=list_filters,
 		fields=["base_grand_total"],
@@ -98,7 +98,7 @@ def get_supplier_performance(supplier=None, company=None):
 	if supplier:
 		filters["supplier"] = supplier
 
-	purchases = frappe.get_all(
+	purchases = frappe.get_list(
 		"Purchase Order",
 		filters=filters,
 		fields=["supplier", "base_grand_total", "status", "transaction_date"],
