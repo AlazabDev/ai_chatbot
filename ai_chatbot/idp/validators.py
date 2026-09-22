@@ -209,13 +209,13 @@ def _fuzzy_resolve_link(
 		filters = {name_field: ["like", f"%{value}%"]}
 		if company and _doctype_has_company_field(link_doctype):
 			filters["company"] = company
-		matches = frappe.get_all(link_doctype, filters=filters, fields=["name"], limit=5)
+		matches = frappe.get_list(link_doctype, filters=filters, fields=["name"], limit=5)
 		if len(matches) == 1:
 			return matches[0].name
 
 	# 4. LIKE match on name
 	filters = {"name": ["like", f"%{value}%"]}
-	matches = frappe.get_all(link_doctype, filters=filters, fields=["name"], limit=5)
+	matches = frappe.get_list(link_doctype, filters=filters, fields=["name"], limit=5)
 	if len(matches) == 1:
 		return matches[0].name
 
