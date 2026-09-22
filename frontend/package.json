@@ -7,7 +7,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sanjay-kumar001/ai_chatbot.git"
+    "url": "https://github.com/AlazabDev/ai_chatbot.git"
   },
   "scripts": {
     "dev": "vite",
