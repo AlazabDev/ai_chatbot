@@ -23,6 +23,7 @@ import json
 import re
 import shutil
 import subprocess
+from html import escape as escape_html
 from pathlib import Path
 
 import frappe
@@ -233,15 +234,17 @@ def _markdown_to_html(content: str) -> str:
 		return ""
 
 	try:
-		return frappe.utils.md_to_html(content)
+		# AI output is untrusted. Frappe's markdown() sanitizes the generated
+		# HTML before it is embedded into email/PDF output.
+		return frappe.utils.markdown(content, sanitize=True, linkify=True)
 	except Exception:
-		# Fallback: wrap in paragraph tags with basic line break handling
+		# Fail closed: escape the source before adding minimal paragraph markup.
 		paragraphs = content.split("\n\n")
 		html_parts = []
 		for p in paragraphs:
 			p = p.strip()
 			if p:
-				p = p.replace("\n", "<br>")
+				p = escape_html(p).replace("\n", "<br>")
 				html_parts.append(f"<p>{p}</p>")
 		return "\n".join(html_parts)
 
@@ -373,8 +376,10 @@ def _build_email_template(body_html: str, report_name: str, company: str) -> str
 	Returns:
 		Complete HTML email document.
 	"""
-	today = nowdate()
-	subtitle = f" — {company}" if company else ""
+	today = escape_html(str(nowdate()))
+	safe_report_name = escape_html(str(report_name or ""))
+	safe_company = escape_html(str(company or ""))
+	subtitle = f" — {safe_company}" if safe_company else ""
 
 	return f"""<!DOCTYPE html>
 <html>
@@ -388,7 +393,7 @@ font-size: 14px; line-height: 1.6; color: #333; text-align: left; max-width: 800
 
 <div style="background-color: #f8f9fa; border-bottom: 3px solid #4a90d9; padding: 20px; \
 margin-bottom: 20px; border-radius: 4px 4px 0 0;">
-<h2 style="margin: 0 0 5px; color: #2c3e50; text-align: left;">{report_name}</h2>
+<h2 style="margin: 0 0 5px; color: #2c3e50; text-align: left;">{safe_report_name}</h2>
 <p style="margin: 0; color: #7f8c8d; font-size: 14px;">{today}{subtitle}</p>
 </div>
 
@@ -600,7 +605,7 @@ def _pie_to_table(title: str, data: list[dict]) -> str:
 	rows = []
 	total = sum(d.get("value", 0) for d in data if isinstance(d.get("value"), int | float))
 	for d in data:
-		name = d.get("name", "")
+		name = escape_html(str(d.get("name", "")))
 		value = d.get("value", 0)
 		pct = f"{(value / total * 100):.1f}%" if total else ""
 		rows.append(
@@ -609,7 +614,8 @@ def _pie_to_table(title: str, data: list[dict]) -> str:
 			f"<td style='{td_r}'>{pct}</td></tr>"
 		)
 
-	title_html = f"<h4 style='margin: 15px 0 8px; color: #2c3e50;'>{title}</h4>" if title else ""
+	safe_title = escape_html(str(title or ""))
+	title_html = f"<h4 style='margin: 15px 0 8px; color: #2c3e50;'>{safe_title}</h4>" if safe_title else ""
 
 	return f"""{title_html}
 <table style='border-collapse: collapse; width: 100%; margin-bottom: 15px;'>
@@ -634,13 +640,13 @@ def _series_to_table(title: str, categories: list, series_list: list[dict]) -> s
 	# Build header: Category + one column per series
 	headers = [f"<th style='{th}'>Category</th>"]
 	for s in series_list:
-		name = s.get("name") or title or "Value"
+		name = escape_html(str(s.get("name") or title or "Value"))
 		headers.append(f"<th style='{th} text-align: right;'>{name}</th>")
 
 	# Build rows
 	rows = []
 	for i, cat in enumerate(categories):
-		cells = [f"<td style='{td}'>{cat}</td>"]
+		cells = [f"<td style='{td}'>{escape_html(str(cat))}</td>"]
 		for s in series_list:
 			data = s.get("data", [])
 			val = data[i] if i < len(data) else ""
@@ -649,10 +655,11 @@ def _series_to_table(title: str, categories: list, series_list: list[dict]) -> s
 				val = val.get("value", "")
 			if isinstance(val, int | float):
 				val = f"{val:,.2f}"
-			cells.append(f"<td style='{td_r}'>{val}</td>")
+			cells.append(f"<td style='{td_r}'>{escape_html(str(val))}</td>")
 		rows.append(f"<tr>{''.join(cells)}</tr>")
 
-	title_html = f"<h4 style='margin: 15px 0 8px; color: #2c3e50;'>{title}</h4>" if title else ""
+	safe_title = escape_html(str(title or ""))
+	title_html = f"<h4 style='margin: 15px 0 8px; color: #2c3e50;'>{safe_title}</h4>" if safe_title else ""
 
 	return f"""{title_html}
 <table style='border-collapse: collapse; width: 100%; margin-bottom: 15px;'>
