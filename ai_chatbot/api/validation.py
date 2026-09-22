@@ -76,12 +76,22 @@ def validate_message_payload(message: str | None, attachments=None) -> tuple[str
 		if not file_url.startswith(("/private/files/", "/files/")):
 			frappe.throw(f"Attachment {index} has an invalid file URL.", frappe.ValidationError)
 
+		# Resolve the File now so inaccessible/private files are rejected before
+		# their metadata is persisted into a conversation.
+		from ai_chatbot.idp.extractors.base import _get_file_doc
+
+		file_doc = _get_file_doc(file_url)
+		try:
+			size = max(0, int(att.get("size") or file_doc.file_size or 0))
+		except (TypeError, ValueError):
+			size = max(0, int(file_doc.file_size or 0))
+
 		canonical.append(
 			{
-				"file_url": file_url,
-				"file_name": str(att.get("file_name") or file_url.rsplit("/", 1)[-1])[:255],
+				"file_url": file_doc.file_url,
+				"file_name": str(file_doc.file_name or file_url.rsplit("/", 1)[-1])[:255],
 				"mime_type": str(att.get("mime_type") or "application/octet-stream")[:255],
-				"size": int(att.get("size") or 0),
+				"size": size,
 				"is_image": bool(att.get("is_image")),
 			}
 		)
