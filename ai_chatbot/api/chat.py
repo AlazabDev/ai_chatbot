@@ -42,6 +42,16 @@ def _user_facing_error(error: Exception) -> str:
 	return _FALLBACK_USER_ERROR
 
 
+def _get_owned_conversation(conversation_id: str):
+	"""Load a conversation and enforce row ownership for the current user."""
+	from ai_chatbot.core.permissions import conversation_has_permission
+
+	conversation = frappe.get_doc("Chatbot Conversation", conversation_id)
+	if not conversation_has_permission(conversation, user=frappe.session.user, permission_type="read"):
+		frappe.throw("You do not have permission to access this conversation.", frappe.PermissionError)
+	return conversation
+
+
 @frappe.whitelist()
 def create_conversation(title: str, ai_provider: str = "OpenAI", foundry_agent: str | None = None) -> dict:
 	"""Create a new chat conversation.
@@ -51,6 +61,16 @@ def create_conversation(title: str, ai_provider: str = "OpenAI", foundry_agent: 
 	otherwise so the frontend can pass it unconditionally.
 	"""
 	try:
+		if ai_provider == "Azure AI Foundry Agent" and foundry_agent:
+			agent = frappe.db.get_value(
+				"Foundry Agent",
+				foundry_agent,
+				["enabled", "foundry_assistant_id"],
+				as_dict=True,
+			)
+			if not agent or not agent.enabled or not (agent.foundry_assistant_id or "").strip():
+				frappe.throw("The selected Foundry Agent is not available or is not configured.")
+
 		doc_fields = {
 			"doctype": "Chatbot Conversation",
 			"title": title,
@@ -102,6 +122,8 @@ def get_conversations(limit: int = 20) -> dict:
 def get_conversation_messages(conversation_id: str) -> dict:
 	"""Get messages for a conversation"""
 	try:
+		_get_owned_conversation(conversation_id)
+
 		messages = frappe.get_all(
 			"Chatbot Message",
 			filters={"conversation": conversation_id},
@@ -800,7 +822,7 @@ def search_conversations(query: str, limit: int = 20) -> dict:
 		)
 
 		# Search by message content (get distinct conversation IDs)
-		message_conv_ids = frappe.get_all(
+		message_conv_ids = frappe.get_list(
 			"Chatbot Message",
 			filters={"content": ["like", like_pattern]},
 			fields=["conversation"],
@@ -868,7 +890,7 @@ def get_mention_values(mention_type: str, search_term: str = "", company: str | 
 			filters = {}
 			if search_term:
 				filters["name"] = ["like", f"%{search_term}%"]
-			companies = frappe.get_all(
+			companies = frappe.get_list(
 				"Company",
 				filters=filters,
 				pluck="name",
@@ -902,7 +924,7 @@ def get_mention_values(mention_type: str, search_term: str = "", company: str | 
 			if mention_type in ("cost_center", "department", "warehouse") and company:
 				filters["company"] = company
 
-			values = frappe.get_all(
+			values = frappe.get_list(
 				doctype,
 				filters=filters,
 				pluck="name",
