@@ -33,10 +33,11 @@ export default defineConfig({
       },
       output: {
         manualChunks(id) {
+          // zrender has no dependency on ECharts, so splitting only this layer
+          // avoids Rollup circular-chunk warnings while keeping both chunks
+          // comfortably below the 500 kB production warning threshold.
           if (id.includes('/node_modules/zrender/')) return 'zrender'
-          if (id.includes('/node_modules/echarts/lib/chart/')) return 'echarts-charts'
-          if (id.includes('/node_modules/echarts/lib/component/')) return 'echarts-components'
-          if (id.includes('/node_modules/echarts/')) return 'echarts-core'
+          if (id.includes('/node_modules/echarts/')) return 'echarts'
           if (id.includes('/node_modules/vue/') || id.includes('/node_modules/vue-router/')) return 'vue-vendor'
           if (id.includes('/node_modules/lucide-vue-next/')) return 'icons'
         },
