@@ -10,6 +10,7 @@ import json
 import frappe
 
 from ai_chatbot.api.history import get_conversation_history
+from ai_chatbot.api.validation import bounded_int, clean_title, validate_message_payload
 from ai_chatbot.core.ai_utils import extract_response, extract_tool_info, safe_json
 from ai_chatbot.core.audit import log_audit_event
 from ai_chatbot.core.exceptions import ChatbotError
@@ -37,7 +38,7 @@ def _user_facing_error(error: Exception) -> str:
 	a generic notice — the original exception is logged separately, so no
 	information is lost; it just doesn't get rendered to the end user.
 	"""
-	if isinstance(error, ChatbotError):
+	if isinstance(error, (ChatbotError, frappe.ValidationError, frappe.PermissionError)):
 		return str(error)
 	return _FALLBACK_USER_ERROR
 
@@ -61,6 +62,7 @@ def create_conversation(title: str, ai_provider: str = "OpenAI", foundry_agent: 
 	otherwise so the frontend can pass it unconditionally.
 	"""
 	try:
+		title = clean_title(title)
 		if ai_provider == "Azure AI Foundry Agent" and foundry_agent:
 			agent = frappe.db.get_value(
 				"Foundry Agent",
@@ -94,14 +96,15 @@ def create_conversation(title: str, ai_provider: str = "OpenAI", foundry_agent: 
 		}
 	except Exception as e:
 		log_error(f"Error creating conversation: {e!s}", title="Chat API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 @frappe.whitelist()
 def get_conversations(limit: int = 20) -> dict:
 	"""Get user's conversations"""
 	try:
-		conversations = frappe.get_all(
+		limit = bounded_int(limit, default=20, maximum=100)
+		conversations = frappe.get_list(
 			"Chatbot Conversation",
 			filters={"user": frappe.session.user},
 			fields=["name", "title", "ai_provider", "status", "created_at", "updated_at", "message_count"],
@@ -115,7 +118,7 @@ def get_conversations(limit: int = 20) -> dict:
 		}
 	except Exception as e:
 		log_error(f"Error getting conversations: {e!s}", title="Chat API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 @frappe.whitelist()
@@ -196,7 +199,7 @@ def get_conversation_messages(conversation_id: str) -> dict:
 		}
 	except Exception as e:
 		log_error(f"Error getting messages: {e!s}", title="Chat API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 @frappe.whitelist()
@@ -221,6 +224,11 @@ def send_message(
 		is_retry: If True, skip saving the user message (already persisted).
 	"""
 	try:
+		is_retry = is_retry in (True, "true", "True", "1", 1)
+		if is_retry:
+			attachments = None
+		message, attachments = validate_message_payload(message, attachments)
+
 		log_info("Incoming message", conversation_id=conversation_id, stream=stream)
 
 		if stream:
@@ -237,9 +245,6 @@ def send_message(
 
 		# Set conversation context for session tools
 		frappe.flags.current_conversation_id = conversation_id
-
-		# Normalise is_retry (Frappe may pass "true"/"1" as a string)
-		is_retry = is_retry in (True, "true", "True", "1", 1)
 
 		if is_retry:
 			# Remove any incomplete assistant message from the failed attempt
@@ -583,9 +588,7 @@ def generate_ai_response(conversation, provider, history, tools) -> dict:
 def delete_conversation(conversation_id: str) -> dict:
 	"""Delete a conversation and its messages"""
 	try:
-		conversation = frappe.get_doc("Chatbot Conversation", conversation_id)
-		if conversation.user != frappe.session.user:
-			frappe.throw("Unauthorized access to conversation")
+		conversation = _get_owned_conversation(conversation_id)
 
 		# Delete all messages
 		messages = frappe.get_all("Chatbot Message", filters={"conversation": conversation_id})
@@ -599,16 +602,15 @@ def delete_conversation(conversation_id: str) -> dict:
 		return {"success": True}
 	except Exception as e:
 		log_error(f"Error deleting conversation: {e!s}", title="Chat API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 @frappe.whitelist()
 def update_conversation_title(conversation_id: str, title: str) -> dict:
 	"""Update conversation title"""
 	try:
-		conversation = frappe.get_doc("Chatbot Conversation", conversation_id)
-		if conversation.user != frappe.session.user:
-			frappe.throw("Unauthorized access to conversation")
+		conversation = _get_owned_conversation(conversation_id)
+		title = clean_title(title)
 
 		conversation.title = title
 		conversation.updated_at = frappe.utils.now()
@@ -618,7 +620,7 @@ def update_conversation_title(conversation_id: str, title: str) -> dict:
 		return {"success": True}
 	except Exception as e:
 		log_error(f"Error updating title: {e!s}", title="Chat API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 @frappe.whitelist()
@@ -636,9 +638,7 @@ def set_conversation_language(conversation_id: str, language: str = "") -> dict:
 		dict with success status.
 	"""
 	try:
-		conversation = frappe.get_doc("Chatbot Conversation", conversation_id)
-		if conversation.user != frappe.session.user:
-			frappe.throw("Unauthorized access to conversation")
+		conversation = _get_owned_conversation(conversation_id)
 
 		from ai_chatbot.core.session_context import set_session_context
 
@@ -648,7 +648,7 @@ def set_conversation_language(conversation_id: str, language: str = "") -> dict:
 		return {"success": True, "language": language}
 	except Exception as e:
 		log_error(f"Error setting conversation language: {e!s}", title="Chat API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 @frappe.whitelist()
@@ -705,7 +705,7 @@ def get_settings() -> dict:
 		}
 	except Exception as e:
 		log_error(f"Error getting settings: {e!s}", title="Chat API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 @frappe.whitelist()
@@ -787,7 +787,7 @@ def get_sample_prompts() -> dict:
 		return {"success": True, "categories": categories, "mentions": mentions}
 	except Exception as e:
 		log_error(f"Error loading sample prompts: {e!s}", title="Chat API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 @frappe.whitelist()
@@ -805,7 +805,8 @@ def search_conversations(query: str, limit: int = 20) -> dict:
 		dict with success and conversations list.
 	"""
 	try:
-		query = query.strip()
+		limit = bounded_int(limit, default=20, maximum=100)
+		query = str(query or "").strip()[:500]
 		if not query or len(query) < 2:
 			return {"success": True, "conversations": []}
 
@@ -813,7 +814,7 @@ def search_conversations(query: str, limit: int = 20) -> dict:
 		like_pattern = f"%{query}%"
 
 		# Search by conversation title
-		title_matches = frappe.get_all(
+		title_matches = frappe.get_list(
 			"Chatbot Conversation",
 			filters={"user": user, "title": ["like", like_pattern]},
 			fields=["name", "title", "ai_provider", "status", "created_at", "updated_at", "message_count"],
@@ -834,7 +835,7 @@ def search_conversations(query: str, limit: int = 20) -> dict:
 		# Filter to user's conversations and fetch details
 		content_matches = []
 		if message_conv_names:
-			content_matches = frappe.get_all(
+			content_matches = frappe.get_list(
 				"Chatbot Conversation",
 				filters={"user": user, "name": ["in", message_conv_names]},
 				fields=[
@@ -866,7 +867,7 @@ def search_conversations(query: str, limit: int = 20) -> dict:
 		}
 	except Exception as e:
 		log_error(f"Search conversations error: {e!s}", title="Chat API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 @frappe.whitelist()
@@ -940,7 +941,7 @@ def get_mention_values(mention_type: str, search_term: str = "", company: str | 
 
 	except Exception as e:
 		log_error(f"Mention values error: {e!s}", title="Chat API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 def _get_period_presets(company: str | None = None) -> list[dict]:
