@@ -39,6 +39,66 @@ jobs:
       - name: Ruff critical checks
         run: ruff check ai_chatbot scripts --select E9,F63,F7,F82
 
+  frappe-integration:
+    name: Frappe v15 install and migrate
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    services:
+      mariadb:
+        image: mariadb:10.6
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -proot"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mariadb-client redis-server libcups2-dev
+          python -m pip install --disable-pip-version-check frappe-bench
+
+      - name: Prepare Frappe v15 bench
+        run: |
+          git clone --depth 1 --branch version-15 https://github.com/frappe/frappe.git "$HOME/frappe"
+          bench init --skip-assets --frappe-path "$HOME/frappe" --python "$(which python)" "$HOME/frappe-bench"
+          cd "$HOME/frappe-bench"
+          bench get-app --skip-assets --branch version-15 payments https://github.com/frappe/payments.git
+          bench get-app --skip-assets --branch version-15 erpnext https://github.com/frappe/erpnext.git
+          bench get-app --skip-assets "file://$GITHUB_WORKSPACE"
+
+      - name: Create integration site
+        run: |
+          mariadb --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL character_set_server = 'utf8mb4'"
+          mariadb --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL collation_server = 'utf8mb4_unicode_ci'"
+          cd "$HOME/frappe-bench"
+          bench new-site test_site             --db-host 127.0.0.1             --db-root-username root             --db-root-password root             --admin-password admin             --no-mariadb-socket
+          bench --site test_site install-app payments
+          bench --site test_site install-app erpnext
+
+      - name: Install and migrate AI Chatbot
+        run: |
+          cd "$HOME/frappe-bench"
+          bench --site test_site install-app ai_chatbot
+          bench --site test_site migrate
+          bench --site test_site list-apps
+
   frontend-build:
     name: Frontend production build
     runs-on: ubuntu-latest
@@ -47,7 +107,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: yarn
           cache-dependency-path: frontend/yarn.lock
 
