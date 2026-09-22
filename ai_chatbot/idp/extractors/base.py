@@ -109,14 +109,17 @@ def _get_file_doc(file_url: str):
 			urls_to_try.append(url)
 
 	for url in urls_to_try:
-		if frappe.db.exists("File", {"file_url": url}):
-			return frappe.get_doc("File", {"file_url": url})
+		file_name = frappe.db.get_value("File", {"file_url": url}, "name")
+		if not file_name:
+			continue
 
-	# Last resort: try matching by file_name (the filename part only)
-	file_name = unquote(file_url.split("/")[-1])
-	if frappe.db.exists("File", {"file_name": file_name}):
-		return frappe.get_doc("File", {"file_name": file_name})
+		file_doc = frappe.get_doc("File", file_name)
+		if not file_doc.has_permission("read"):
+			frappe.throw("You do not have permission to access this file.", frappe.PermissionError)
+		return file_doc
 
+	# Do not fall back to a bare filename lookup. Filenames are not globally
+	# unique and doing so could resolve a different user's private attachment.
 	frappe.throw(
 		f"File not found for URL: {file_url}",
 		frappe.DoesNotExistError,
