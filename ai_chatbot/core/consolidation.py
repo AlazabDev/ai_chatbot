@@ -7,7 +7,7 @@ Parent company detection, child company discovery, and consolidated data executi
 
 import frappe
 
-from ai_chatbot.core.config import get_company_currency
+from ai_chatbot.core.config import get_company_currency, get_default_company, has_company_access
 
 
 def is_parent_company(company):
@@ -62,9 +62,10 @@ def get_consolidated_data(tool_func, parent_company, **kwargs):
 			- target_currency: The parent company's currency
 			- parent_company: The parent company name
 	"""
+	parent_company = get_default_company(parent_company)
 	target_currency = get_company_currency(parent_company)
-	children = get_child_companies(parent_company)
-	all_companies = [parent_company, *list(children)]
+	children = [company for company in get_child_companies(parent_company) if has_company_access(company)]
+	all_companies = [parent_company, *children]
 
 	results = []
 	for company in all_companies:
@@ -90,7 +91,7 @@ def get_consolidated_data(tool_func, parent_company, **kwargs):
 			results.append(
 				{
 					"company": company,
-					"data": {"error": str(e)},
+					"data": {"error": "Consolidation failed for this company."},
 					"currency": get_company_currency(company),
 					"exchange_rate": 1.0,
 				}
