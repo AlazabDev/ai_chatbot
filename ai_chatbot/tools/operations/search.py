@@ -11,6 +11,15 @@ from ai_chatbot.core.config import get_default_company
 from ai_chatbot.tools.registry import register_tool
 
 
+def _safe_limit(value, default=10, maximum=50):
+	"""Normalize LLM-provided limits to a bounded positive integer."""
+	try:
+		value = int(value)
+	except (TypeError, ValueError):
+		value = default
+	return max(1, min(value, maximum))
+
+
 @register_tool(
 	name="search_customers",
 	category="operations",
@@ -27,6 +36,7 @@ from ai_chatbot.tools.registry import register_tool
 def search_customers(query=None, customer_group=None, territory=None, limit=10, company=None):
 	"""Search customers with fuzzy name matching and optional filters."""
 	company = get_default_company(company)
+	limit = _safe_limit(limit)
 
 	filters = {}
 	or_filters = {}
@@ -42,7 +52,7 @@ def search_customers(query=None, customer_group=None, territory=None, limit=10, 
 	if territory:
 		filters["territory"] = territory
 
-	customers = frappe.get_all(
+	customers = frappe.get_list(
 		"Customer",
 		filters=filters,
 		or_filters=or_filters,
@@ -73,6 +83,7 @@ def search_customers(query=None, customer_group=None, territory=None, limit=10, 
 def search_items(query=None, item_group=None, limit=10, company=None):
 	"""Search items by name, code, or group."""
 	company = get_default_company(company)
+	limit = _safe_limit(limit)
 
 	filters = {}
 	or_filters = {}
@@ -87,7 +98,7 @@ def search_items(query=None, item_group=None, limit=10, company=None):
 	if item_group:
 		filters["item_group"] = item_group
 
-	items = frappe.get_all(
+	items = frappe.get_list(
 		"Item",
 		filters=filters,
 		or_filters=or_filters,
@@ -123,13 +134,21 @@ def search_documents(doctype=None, query=None, status=None, limit=10, company=No
 	"""Search documents of a specified DocType."""
 	if not doctype:
 		return {"error": "doctype parameter is required"}
+	if not frappe.db.exists("DocType", doctype):
+		return {"error": f"Unknown DocType: {doctype}"}
+	if not frappe.has_permission(doctype, "read", user=frappe.session.user):
+		return {"error": f"You do not have permission to read {doctype}"}
+
+	meta = frappe.get_meta(doctype)
+	if meta.istable:
+		return {"error": "Child-table DocTypes cannot be searched directly."}
 
 	company = get_default_company(company)
+	limit = _safe_limit(limit)
 
 	# Build filters
 	filters = {}
 	or_filters = {}
-	meta = frappe.get_meta(doctype)
 
 	# Add company filter if the DocType has a company field
 	if meta.has_field("company"):
@@ -166,7 +185,7 @@ def search_documents(doctype=None, query=None, status=None, limit=10, company=No
 		if meta.has_field(fname):
 			fields.append(fname)
 
-	documents = frappe.get_all(
+	documents = frappe.get_list(
 		doctype,
 		filters=filters,
 		or_filters=or_filters,
