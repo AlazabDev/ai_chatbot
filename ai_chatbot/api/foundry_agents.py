@@ -29,4 +29,4 @@ def get_foundry_agents() -> dict:
 		return {"success": True, "agents": agents}
 	except Exception as e:
 		log_error(f"Error getting foundry agents: {e!s}", title="Foundry Agents API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": "Foundry agents could not be loaded."}
