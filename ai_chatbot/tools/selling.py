@@ -59,7 +59,7 @@ def get_sales_analytics(from_date=None, to_date=None, customer=None, company=Non
 	if customer:
 		list_filters.append(["customer", "=", customer])
 
-	invoices = frappe.get_all(
+	invoices = frappe.get_list(
 		"Sales Invoice",
 		filters=list_filters,
 		fields=["base_grand_total"],
