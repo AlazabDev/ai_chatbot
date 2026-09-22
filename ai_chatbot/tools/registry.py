@@ -320,9 +320,7 @@ def _ensure_tools_loaded():
 		import ai_chatbot.tools.finance.gl_analytics
 		import ai_chatbot.tools.finance.profitability
 		import ai_chatbot.tools.idp
-		import ai_chatbot.tools.operations.create
 		import ai_chatbot.tools.operations.search
-		import ai_chatbot.tools.operations.update
 		import ai_chatbot.tools.predictive.anomaly_detection
 		import ai_chatbot.tools.predictive.cash_flow_forecast
 		import ai_chatbot.tools.predictive.demand_forecast
