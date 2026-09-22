@@ -139,6 +139,18 @@ fixtures = ["Foundry Agent"]
 # 	"Event": "frappe.desk.doctype.event.event.has_permission",
 # }
 
+# Row-level isolation for user-owned chatbot data. System Managers keep
+# administrative visibility; normal users can only access their own rows.
+permission_query_conditions = {
+	"Chatbot Conversation": "ai_chatbot.core.permissions.conversation_query",
+	"Chatbot Message": "ai_chatbot.core.permissions.message_query",
+}
+
+has_permission = {
+	"Chatbot Conversation": "ai_chatbot.core.permissions.conversation_has_permission",
+	"Chatbot Message": "ai_chatbot.core.permissions.message_has_permission",
+}
+
 # Document Events
 # ---------------
 # Hook on document methods and events
