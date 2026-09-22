@@ -105,6 +105,11 @@ jobs:
           bench --site test_site migrate
           bench --site test_site list-apps
 
+      - name: Production smoke assertions
+        run: |
+          cd "$HOME/frappe-bench"
+          bench --site test_site execute ai_chatbot.tests.production_smoke.run
+
   frontend-build:
     name: Frontend production build
     runs-on: ubuntu-latest
