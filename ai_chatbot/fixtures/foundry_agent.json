@@ -1,0 +1,66 @@
+[
+ {
+  "doctype": "Foundry Agent",
+  "agent_key": "az-agent-core",
+  "icon": "\ud83e\udde9",
+  "description": "Core routing / general-purpose agent.",
+  "enabled": 1,
+  "foundry_assistant_id": ""
+ },
+ {
+  "doctype": "Foundry Agent",
+  "agent_key": "az-agent-copilot",
+  "icon": "\ud83e\udd16",
+  "description": "General copilot for day-to-day questions.",
+  "enabled": 1,
+  "foundry_assistant_id": ""
+ },
+ {
+  "doctype": "Foundry Agent",
+  "agent_key": "az-agent-finance",
+  "icon": "\ud83d\udcb0",
+  "description": "Finance and invoicing questions.",
+  "enabled": 1,
+  "foundry_assistant_id": ""
+ },
+ {
+  "doctype": "Foundry Agent",
+  "agent_key": "az-agent-maint",
+  "icon": "\ud83d\udd27",
+  "description": "UberFix maintenance and tickets.",
+  "enabled": 1,
+  "foundry_assistant_id": ""
+ },
+ {
+  "doctype": "Foundry Agent",
+  "agent_key": "az-agent-project",
+  "icon": "\ud83c\udfd7\ufe0f",
+  "description": "Construction / project status questions.",
+  "enabled": 1,
+  "foundry_assistant_id": ""
+ },
+ {
+  "doctype": "Foundry Agent",
+  "agent_key": "az-agent-vision",
+  "icon": "\ud83d\udc41\ufe0f",
+  "description": "Image / document vision tasks.",
+  "enabled": 1,
+  "foundry_assistant_id": ""
+ },
+ {
+  "doctype": "Foundry Agent",
+  "agent_key": "az-agent-prod",
+  "icon": "\ud83c\udfed",
+  "description": "Production / Laban Alasfour materials.",
+  "enabled": 1,
+  "foundry_assistant_id": ""
+ },
+ {
+  "doctype": "Foundry Agent",
+  "agent_key": "az-agent-codex",
+  "icon": "\ud83d\udcbb",
+  "description": "Coding agent (az-ai-gateway project) — usually not chat-facing.",
+  "enabled": 0,
+  "foundry_assistant_id": ""
+ }
+]

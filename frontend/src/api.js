@@ -235,7 +235,7 @@ class ChatAPI {
    * ai_provider is "Azure AI Foundry Agent".
    */
   async getFoundryAgents() {
-    return this.requestEndpoint(FOUNDRY_API_BASE, 'get_foundry_agents')
+    return this.request('get_foundry_agents')
   }
 
   /**

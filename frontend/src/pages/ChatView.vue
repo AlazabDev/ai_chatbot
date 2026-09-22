@@ -57,6 +57,34 @@
         </div>
 
         <div class="w-full max-w-2xl">
+          <!-- Foundry agent picker: only when the workspace uses the
+               Azure AI Foundry Agent provider. Once a conversation exists
+               the bound agent can't change (it owns a Foundry thread), so
+               this only shows before the first message. -->
+          <div
+            v-if="selectedProvider === 'Azure AI Foundry Agent' && foundryAgents.length > 0"
+            class="flex items-center justify-center gap-2 mb-3"
+          >
+            <span class="text-xs text-gray-500 dark:text-gray-400">Agent:</span>
+            <select
+              v-model="selectedAgent"
+              class="text-xs px-2 py-1 rounded-md border border-gray-300 dark:border-gray-600
+                     bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200
+                     focus:ring-1 focus:ring-blue-400 outline-none"
+            >
+              <option v-for="agent in foundryAgents" :key="agent.name" :value="agent.name">
+                {{ agent.icon ? agent.icon + ' ' : '' }}{{ agent.name }}
+              </option>
+            </select>
+            <span
+              v-if="foundryAgents.find(a => a.name === selectedAgent)?.description"
+              class="text-xs text-gray-400 dark:text-gray-500 max-w-xs truncate"
+              :title="foundryAgents.find(a => a.name === selectedAgent)?.description"
+            >
+              — {{ foundryAgents.find(a => a.name === selectedAgent)?.description }}
+            </span>
+          </div>
+
           <ChatInput
             :disabled="isLoading"
             :is-streaming="isStreaming"
@@ -70,7 +98,16 @@
       <!-- Conversation state: messages + bottom-pinned input -->
       <template v-else>
         <!-- Conversation action bar -->
-        <div class="flex items-center justify-end px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+        <div class="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+          <span
+            v-if="currentConversation?.ai_provider === 'Azure AI Foundry Agent' && currentConversation?.foundry_agent"
+            class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+            title="This conversation is bound to this Foundry agent for its whole lifetime"
+          >
+            {{ foundryAgents.find(a => a.name === currentConversation.foundry_agent)?.icon || '🧩' }}
+            {{ currentConversation.foundry_agent }}
+          </span>
+          <span v-else></span>
           <button
             v-if="currentConversation && messages.length > 0"
             @click="handleExportConversation"
@@ -241,6 +278,8 @@ const currentConversation = ref(null)
 const messages = ref([])
 const isLoading = ref(false)
 const selectedProvider = ref('OpenAI')
+const foundryAgents = ref([])
+const selectedAgent = ref('')
 const messagesContainer = ref(null)
 const streamingEnabled = ref(true)
 
@@ -502,6 +541,22 @@ onMounted(async () => {
     }
   }
 
+  // Only relevant when the workspace is on the Foundry Agent provider —
+  // fetch which az-agent-* are enabled so the picker has something to show.
+  if (selectedProvider.value === 'Azure AI Foundry Agent') {
+    try {
+      const agentsResult = await chatAPI.getFoundryAgents()
+      if (agentsResult?.success) {
+        foundryAgents.value = agentsResult.agents
+        if (foundryAgents.value.length > 0) {
+          selectedAgent.value = foundryAgents.value[0].name
+        }
+      }
+    } catch (error) {
+      console.error('Error loading Foundry agents:', error)
+    }
+  }
+
   // Initialize Socket.IO connection if streaming is enabled
   if (streamingEnabled.value) {
     initSocket()
@@ -542,7 +597,8 @@ const ensureConversation = async () => {
   try {
     const response = await chatAPI.createConversation(
       'New Chat',
-      selectedProvider.value
+      selectedProvider.value,
+      selectedProvider.value === 'Azure AI Foundry Agent' ? selectedAgent.value : null
     )
     if (response.success) {
       await loadConversations()
@@ -551,6 +607,7 @@ const ensureConversation = async () => {
         name: response.conversation_id,
         title: 'New Chat',
         ai_provider: selectedProvider.value,
+        foundry_agent: selectedAgent.value,
       }
       return true
     }

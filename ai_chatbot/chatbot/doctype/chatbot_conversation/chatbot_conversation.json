@@ -10,6 +10,8 @@
   "title",
   "user",
   "ai_provider",
+  "foundry_agent",
+  "foundry_thread_id",
   "model",
   "column_break_1",
   "status",
@@ -42,9 +44,25 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "AI Provider",
-   "options": "OpenAI\nClaude\nGemini\nAzure OpenAI\nLocal LLM (OpenAI-compatible)",
+   "options": "OpenAI\nClaude\nGemini\nAzure OpenAI\nLocal LLM (OpenAI-compatible)\nAzure AI Foundry Agent",
    "read_only": 1,
    "reqd": 1
+  },
+  {
+   "fieldname": "foundry_agent",
+   "fieldtype": "Link",
+   "label": "Foundry Agent",
+   "options": "Foundry Agent",
+   "depends_on": "eval:doc.ai_provider == 'Azure AI Foundry Agent'",
+   "description": "Which az-agent-* this conversation is bound to (Azure AI Foundry Agent provider only)."
+  },
+  {
+   "fieldname": "foundry_thread_id",
+   "fieldtype": "Data",
+   "label": "Foundry Thread ID",
+   "read_only": 1,
+   "hidden": 1,
+   "description": "Azure AI Foundry Agent thread id backing this conversation (Azure AI Foundry Agent provider only)."
   },
   {
    "fieldname": "model",

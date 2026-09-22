@@ -162,7 +162,11 @@ def _run_streaming_job(conversation_id: str, stream_id: str, ai_provider: str, u
 
 		_publish_process_step(conversation_id, stream_id, "Communicating with LLM...", user)
 
-		provider = get_ai_provider(ai_provider)
+		# Only Azure AI Foundry Agent needs the doc itself (to persist
+		# foundry_thread_id); fetching it unconditionally keeps this call
+		# site simple and is a single cheap get_doc.
+		conversation_doc = frappe.get_doc("Chatbot Conversation", conversation_id)
+		provider = get_ai_provider(ai_provider, conversation=conversation_doc)
 
 		# Route to relevant tool subset (Phase 12A)
 		user_msg = next(

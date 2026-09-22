@@ -76,7 +76,7 @@ def log_audit_event(
 		frappe.enqueue(
 			_insert_audit_log,
 			queue="short",
-			now=frappe.flags.in_test,
+			now=frappe.in_test,  # frappe.flags.in_test deprecated in v16 — use frappe.in_test
 			event_type=event_type,
 			conversation=conversation,
 			message=message,

@@ -14,6 +14,12 @@
   "azure_deployment_name",
   "azure_api_version",
   "local_llm_base_url",
+  "azure_foundry_endpoint",
+  "azure_foundry_agent_id",
+  "azure_foundry_api_version",
+  "azure_foundry_tenant_id",
+  "azure_foundry_client_id",
+  "azure_foundry_client_secret",
   "column_break_api",
   "temperature",
   "max_tokens",
@@ -84,11 +90,11 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "AI Provider",
-   "options": "OpenAI\nClaude\nGemini\nAzure OpenAI\nLocal LLM (OpenAI-compatible)",
+   "options": "OpenAI\nClaude\nGemini\nAzure OpenAI\nLocal LLM (OpenAI-compatible)\nAzure AI Foundry Agent",
    "reqd": 1
   },
   {
-   "description": "API key for the selected provider. Stored encrypted. Optional for a Local LLM — leave blank for an unsecured Ollama/LM Studio server.",
+   "description": "API key for the selected provider. Stored encrypted. Optional for a Local LLM \u2014 leave blank for an unsecured Ollama/LM Studio server.",
    "fieldname": "api_key",
    "fieldtype": "Password",
    "label": "API Key",
@@ -134,6 +140,46 @@
    "label": "Local LLM Base URL"
   },
   {
+   "fieldname": "azure_foundry_endpoint",
+   "fieldtype": "Data",
+   "label": "Foundry Project Endpoint",
+   "depends_on": "eval:doc.ai_provider == 'Azure AI Foundry Agent'",
+   "description": "e.g. https://<resource>.services.ai.azure.com/api/projects/<project>"
+  },
+  {
+   "fieldname": "azure_foundry_agent_id",
+   "fieldtype": "Data",
+   "label": "Default Agent ID (fallback)",
+   "depends_on": "eval:doc.ai_provider == 'Azure AI Foundry Agent'",
+   "description": "Used only when a conversation isn't bound to a specific Foundry Agent record. Per-conversation agent choice comes from the Foundry Agent list, picked in the chat UI."
+  },
+  {
+   "fieldname": "azure_foundry_api_version",
+   "fieldtype": "Data",
+   "label": "Foundry API Version",
+   "depends_on": "eval:doc.ai_provider == 'Azure AI Foundry Agent'",
+   "default": "2025-05-01"
+  },
+  {
+   "fieldname": "azure_foundry_tenant_id",
+   "fieldtype": "Data",
+   "label": "Foundry Tenant ID",
+   "depends_on": "eval:doc.ai_provider == 'Azure AI Foundry Agent'"
+  },
+  {
+   "fieldname": "azure_foundry_client_id",
+   "fieldtype": "Data",
+   "label": "Foundry Client ID",
+   "depends_on": "eval:doc.ai_provider == 'Azure AI Foundry Agent'",
+   "description": "Service principal with the Azure AI Developer role on the project."
+  },
+  {
+   "fieldname": "azure_foundry_client_secret",
+   "fieldtype": "Password",
+   "label": "Foundry Client Secret",
+   "depends_on": "eval:doc.ai_provider == 'Azure AI Foundry Agent'"
+  },
+  {
    "fieldname": "column_break_api",
    "fieldtype": "Column Break"
   },
@@ -168,7 +214,7 @@
    "fieldname": "fallback_provider",
    "fieldtype": "Select",
    "label": "Fallback AI Provider",
-   "options": "\nOpenAI\nClaude\nGemini\nAzure OpenAI\nLocal LLM (OpenAI-compatible)"
+   "options": "\nOpenAI\nClaude\nGemini\nAzure OpenAI\nLocal LLM (OpenAI-compatible)\nAzure AI Foundry Agent"
   },
   {
    "depends_on": "eval:doc.fallback_provider",

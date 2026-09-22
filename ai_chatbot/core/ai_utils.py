@@ -22,6 +22,10 @@ _OPENAI_FORMAT_PROVIDERS = frozenset(
 		"Gemini",
 		"Azure OpenAI",
 		"Local LLM (OpenAI-compatible)",
+		# Not a wire format of its own — AzureAIFoundryAgentProvider normalises
+		# the Threads/Runs (Assistants v2) response into this shape before it
+		# ever reaches extract_response(), so it's handled identically here.
+		"Azure AI Foundry Agent",
 	}
 )
 
