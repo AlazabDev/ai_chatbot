@@ -15,6 +15,7 @@ import uuid
 import frappe
 
 from ai_chatbot.api.history import get_conversation_history as _get_conversation_history
+from ai_chatbot.api.validation import validate_message_payload
 from ai_chatbot.core.audit import log_audit_event
 from ai_chatbot.core.logger import log_error, log_info, log_request, timer
 from ai_chatbot.core.prompts import build_system_prompt, inject_recall_context, inject_routing_context
@@ -54,11 +55,20 @@ def send_message_streaming(
 	try:
 		# Normalise is_retry (Frappe may pass "true"/"1" as a string)
 		is_retry = is_retry in (True, "true", "True", "1", 1)
+		if is_retry:
+			attachments = None
+		message, attachments = validate_message_payload(message, attachments)
 
 		# Validate conversation ownership
+		from ai_chatbot.core.permissions import conversation_has_permission
+
 		conversation = frappe.get_doc("Chatbot Conversation", conversation_id)
-		if conversation.user != frappe.session.user:
-			frappe.throw("Unauthorized access to conversation")
+		if not conversation_has_permission(
+			conversation,
+			user=frappe.session.user,
+			permission_type="read",
+		):
+			frappe.throw("You do not have permission to access this conversation.", frappe.PermissionError)
 
 		# Generate a unique stream ID for this request
 		stream_id = str(uuid.uuid4())[:8]
@@ -109,9 +119,11 @@ def send_message_streaming(
 
 		return {"success": True, "stream_id": stream_id}
 
+	except (frappe.ValidationError, frappe.PermissionError) as e:
+		return {"success": False, "error": str(e)}
 	except Exception as e:
 		log_error(f"Streaming error: {e!s}", title="Streaming")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": "The streaming request could not be started."}
 
 
 def _run_streaming_job(conversation_id: str, stream_id: str, ai_provider: str, user: str):
