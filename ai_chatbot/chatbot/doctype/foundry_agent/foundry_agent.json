@@ -52,8 +52,8 @@
    "fieldname": "foundry_assistant_id",
    "fieldtype": "Data",
    "label": "Foundry Assistant ID",
-   "reqd": 1,
-   "description": "The asst_... id of this agent on Azure AI Foundry (Threads/Runs API). Never sent to the frontend."
+   "reqd": 0,
+   "description": "Environment-specific Foundry assistant id. Required before enabling the agent."
   }
  ],
  "index_web_pages_for_search": 1,
