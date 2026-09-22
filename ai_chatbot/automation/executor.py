@@ -76,8 +76,8 @@ def execute_prompt(
 		# External plugin categories are excluded by default because only the
 		# built-in, explicitly enumerated TOOL_CATEGORIES are considered here.
 		provider = get_ai_provider(ai_provider)
+		automation_categories = set(TOOL_CATEGORIES) - {"operations", "idp"}
 		if tools_enabled:
-			automation_categories = set(TOOL_CATEGORIES) - {"operations", "idp"}
 			tools = get_tools_by_categories(automation_categories)
 		else:
 			tools = None
