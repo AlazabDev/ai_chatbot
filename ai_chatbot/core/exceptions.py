@@ -14,6 +14,13 @@ class ChatbotError(Exception):
 		super().__init__(self.message)
 
 
+class RequestValidationError(ChatbotError):
+	"""Raised for safe, user-correctable API input errors."""
+
+	def __init__(self, message):
+		super().__init__(message, error_code="REQUEST_VALIDATION_ERROR")
+
+
 class ToolExecutionError(ChatbotError):
 	"""Raised when a tool fails to execute"""
 
