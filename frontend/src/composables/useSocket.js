@@ -7,7 +7,7 @@
  * (outside Frappe desk). Follows the same pattern as Frappe CRM.
  *
  * Connection details:
- * - socketio_port: imported from common_site_config.json
+ * - socketio_port: provided by Frappe boot data (or VITE_SOCKETIO_PORT in local dev)
  * - site_name: injected into window by the server-rendered HTML template
  * - Auth: via session cookie (sid) with withCredentials: true
  *
@@ -18,8 +18,6 @@
 
 import { ref } from 'vue'
 import { Manager } from 'socket.io-client'
-import { socketio_port } from '../../../../../sites/common_site_config.json'
-
 let socket = null
 let manager = null
 const isConnected = ref(false)
@@ -86,10 +84,14 @@ function initSocket() {
 
   try {
     const host = window.location.hostname
-    const siteName = window.site_name || window.location.hostname
-    const port = window.location.port ? `:${socketio_port}` : ''
-    const protocol = window.location.protocol
-    const baseUrl = `${protocol}//${host}${port}`
+    const siteName = window.site_name || window.frappe?.boot?.site_name || host
+    const socketioPort = Number(
+      window.frappe?.boot?.socketio_port || import.meta.env.VITE_SOCKETIO_PORT || 9000
+    )
+    const directSocket = import.meta.env.DEV || Boolean(window.dev_server)
+    const baseUrl = directSocket
+      ? `${window.location.protocol}//${host}:${socketioPort}`
+      : window.location.origin
 
     console.debug(`[AI Chatbot] Socket.IO connecting to: ${baseUrl} (namespace: /${siteName})`)
 
