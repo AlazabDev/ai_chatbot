@@ -672,7 +672,7 @@ def _stream_with_tools(
 					f"Tool execution failed: {tc['name']}: {e!s}",
 					title="Streaming Tool Error",
 				)
-				result = {"error": str(e)}
+				result = {"error": "Tool execution failed."}
 
 			loop_guard.record_call(tc["name"], tc["arguments"])
 			all_tool_results.append(result)
