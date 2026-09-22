@@ -73,6 +73,14 @@ def find_relevant_conversations(
 		Sorted by score descending (most relevant first).
 	"""
 	user = user or frappe.session.user
+	if user != frappe.session.user:
+		is_system_manager = (
+			frappe.session.user == "Administrator"
+			or "System Manager" in frappe.get_roles(frappe.session.user)
+		)
+		if not is_system_manager:
+			frappe.throw("You do not have permission to recall another user's conversations.", frappe.PermissionError)
+
 	msg_lower = user_message.lower()
 
 	# Extract keywords from the user message (words >= 4 chars, skip stopwords)
@@ -81,7 +89,7 @@ def find_relevant_conversations(
 		return []
 
 	# Fetch recent conversations with summaries
-	conversations = frappe.get_all(
+	conversations = frappe.get_list(
 		"Chatbot Conversation",
 		filters={
 			"user": user,
