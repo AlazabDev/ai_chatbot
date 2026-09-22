@@ -10,7 +10,6 @@ import {
   TooltipComponent,
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { LabelLayout, UniversalTransition } from 'echarts/features'
 
 echarts.use([
   BarChart,
@@ -21,8 +20,6 @@ echarts.use([
   TitleComponent,
   TooltipComponent,
   CanvasRenderer,
-  LabelLayout,
-  UniversalTransition,
 ])
 
 export default echarts
