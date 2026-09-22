@@ -57,7 +57,11 @@ def send_message_streaming(
 		is_retry = is_retry in (True, "true", "True", "1", 1)
 		if is_retry:
 			attachments = None
-		message, attachments = validate_message_payload(message, attachments)
+		message, attachments = validate_message_payload(
+			message,
+			attachments,
+			conversation_id=conversation_id,
+		)
 
 		# Validate conversation ownership
 		from ai_chatbot.core.permissions import conversation_has_permission
