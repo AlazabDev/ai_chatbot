@@ -83,6 +83,13 @@ jobs:
           bench get-app --skip-assets --branch version-15 erpnext https://github.com/frappe/erpnext.git
           bench get-app --skip-assets "file://$GITHUB_WORKSPACE"
 
+          # bench new-site and app installation use Frappe's configured Redis
+          # ports (cache/queue), not the distro Redis service on port 6379.
+          redis-server "$HOME/frappe-bench/config/redis_cache.conf" --daemonize yes
+          redis-server "$HOME/frappe-bench/config/redis_queue.conf" --daemonize yes
+          redis-cli -p 13000 ping
+          redis-cli -p 11000 ping
+
       - name: Create integration site
         run: |
           mariadb --host 127.0.0.1 --port 3306 -u root -proot -e "SET GLOBAL character_set_server = 'utf8mb4'"
