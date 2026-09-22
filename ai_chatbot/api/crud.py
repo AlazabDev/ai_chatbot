@@ -211,9 +211,11 @@ def confirm_action(
 
 		return response
 
+	except frappe.PermissionError:
+		raise
 	except Exception as e:
 		log_error(f"CRUD confirm_action error: {e!s}", title="CRUD Confirm")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": "The requested operation could not be completed."}
 
 
 @frappe.whitelist()
@@ -237,9 +239,11 @@ def cancel_action(confirmation_id: str) -> dict:
 
 		return {"success": True, "message": "Action cancelled."}
 
+	except frappe.PermissionError:
+		raise
 	except Exception as e:
 		log_error(f"CRUD cancel_action error: {e!s}", title="CRUD Cancel")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": "The requested operation could not be completed."}
 
 
 @frappe.whitelist()
@@ -269,6 +273,9 @@ def undo_action(undo_token: str) -> dict:
 			}
 
 		metadata = json.loads(data) if isinstance(data, str) else data
+		if metadata.get("user") != frappe.session.user:
+			frappe.throw("You do not have permission to use this undo token.", frappe.PermissionError)
+
 		action = metadata.get("action")
 		doctype = metadata.get("doctype")
 		name = metadata.get("name")
@@ -326,9 +333,11 @@ def undo_action(undo_token: str) -> dict:
 			"message": f"Successfully undone: {action} {doctype} '{name}'.",
 		}
 
+	except frappe.PermissionError:
+		raise
 	except Exception as e:
 		log_error(f"CRUD undo_action error: {e!s}", title="CRUD Undo")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": "The requested operation could not be completed."}
 
 
 # ── Internal Helpers ─────────────────────────────────────────────────
@@ -471,13 +480,13 @@ def _update_confirmation_state(confirmation_id, state, result=None, undo_token=N
 	"""
 	try:
 		# Find the message containing this confirmation_id in tool_results
-		messages = frappe.get_all(
+		messages = frappe.get_list(
 			"Chatbot Message",
 			filters={
 				"role": "assistant",
 				"tool_results": ["like", f"%{confirmation_id}%"],
 			},
-			fields=["name", "confirmation_state"],
+			fields=["name", "conversation", "confirmation_state"],
 			limit=1,
 			order_by="creation desc",
 		)
