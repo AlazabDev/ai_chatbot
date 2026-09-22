@@ -17,3 +17,6 @@ class FoundryAgent(Document):
 	def validate(self):
 		if self.foundry_assistant_id:
 			self.foundry_assistant_id = self.foundry_assistant_id.strip()
+
+		if self.enabled and not self.foundry_assistant_id:
+			frappe.throw("Foundry Assistant ID is required before an agent can be enabled.")
