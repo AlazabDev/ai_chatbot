@@ -15,6 +15,7 @@ def get_context(context):
 	context.csrf_token = csrf_token
 	context.site_name = frappe.local.site
 	context.boot = get_boot()
+	context.dev_server = 1 if frappe.conf.developer_mode else 0
 	return context
 
 
