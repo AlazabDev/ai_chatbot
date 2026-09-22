@@ -48,14 +48,18 @@ def get_default_company(company=None):
 		ai_chatbot.core.exceptions.CompanyRequiredError: If no company can be resolved.
 	"""
 	if company:
-		return _resolve_company_name(company)
+		company = _resolve_company_name(company)
+		_assert_company_access(company)
+		return company
 
 	company = frappe.defaults.get_user_default("Company")
 	if company:
+		_assert_company_access(company)
 		return company
 
 	company = frappe.defaults.get_global_default("company")
 	if company:
+		_assert_company_access(company)
 		return company
 
 	from ai_chatbot.core.exceptions import CompanyRequiredError
@@ -75,7 +79,7 @@ def _resolve_company_name(name: str) -> str:
 		return name
 
 	# Fuzzy match: "Tara Technologies" → "Tara Technologies (Demo)"
-	matches = frappe.get_all(
+	matches = frappe.get_list(
 		"Company",
 		filters={"name": ["like", f"%{name}%"]},
 		pluck="name",
@@ -90,6 +94,24 @@ def _resolve_company_name(name: str) -> str:
 
 	# No match at all — return as-is
 	return name
+
+
+def _assert_company_access(company: str) -> None:
+	"""Reject companies outside the current user's Frappe/User Permission scope."""
+	if not company:
+		return
+	if not frappe.has_permission("Company", ptype="read", doc=company, user=frappe.session.user):
+		frappe.throw(
+			"You do not have permission to access the selected company.",
+			frappe.PermissionError,
+		)
+
+
+def has_company_access(company: str) -> bool:
+	"""Return whether the current user may read the company."""
+	if not company:
+		return False
+	return bool(frappe.has_permission("Company", ptype="read", doc=company, user=frappe.session.user))
 
 
 def get_fiscal_year_dates(company=None):
