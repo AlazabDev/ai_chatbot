@@ -68,7 +68,7 @@ indent-style = "tab"
 docstring-code-format = true
 
 [project.urls]
-Homepage = "https://github.com/sanjay-kumar001/ai_chatbot"
-Documentation = "https://github.com/sanjay-kumar001/ai_chatbot/tree/main/docs"
-Repository = "https://github.com/sanjay-kumar001/ai_chatbot.git"
-"Bug Tracker" = "https://github.com/sanjay-kumar001/ai_chatbot/issues"
+Homepage = "https://github.com/AlazabDev/ai_chatbot"
+Documentation = "https://github.com/AlazabDev/ai_chatbot/tree/main/docs"
+Repository = "https://github.com/AlazabDev/ai_chatbot.git"
+"Bug Tracker" = "https://github.com/AlazabDev/ai_chatbot/issues"
