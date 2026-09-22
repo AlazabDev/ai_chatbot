@@ -19,7 +19,6 @@ import frappe
 from ai_chatbot.core.config import get_default_company
 from ai_chatbot.core.logger import log_error
 from ai_chatbot.data.currency import build_currency_response
-from ai_chatbot.data.operations import create_document
 from ai_chatbot.idp.comparison import compare_with_record
 from ai_chatbot.idp.mapper import extract_and_map, extract_raw
 from ai_chatbot.idp.validators import validate_extraction
@@ -256,110 +255,32 @@ def create_from_extracted_data(
 	create_missing_masters=None,
 	item_defaults_json=None,
 ):
-	"""Create an ERPNext document from extracted and validated data.
+	"""Backward-compatible IDP create entry point.
 
-	Expects the extracted_data from extract_document_data to be passed
-	as a JSON string. Validates permissions and creates the document.
-
-	When strict IDP validation is enabled, re-validates before creation.
-	Otherwise, relies on ERPNext's built-in validation during doc.insert().
+	This function no longer performs writes directly. It converts the legacy
+	call into the standard CRUD proposal flow so document creation and any
+	missing prerequisites require an explicit confirmation token.
 	"""
 	if not extracted_data_json:
 		return {"error": "extracted_data_json is required"}
-
 	if not target_doctype:
 		return {"error": "target_doctype is required"}
 
-	# Check that write operations are enabled
-	settings = frappe.get_single("Chatbot Settings")
-	if not getattr(settings, "enable_write_operations", False):
-		return {"error": "Write operations are disabled in Chatbot Settings"}
-
-	# Parse the data
 	if isinstance(extracted_data_json, str):
 		try:
 			extracted_data = json.loads(extracted_data_json)
 		except json.JSONDecodeError:
 			return {"error": "Invalid JSON in extracted_data_json"}
-	else:
+	elif isinstance(extracted_data_json, dict):
 		extracted_data = extracted_data_json
-
-	# Parse item defaults
-	item_defaults = {}
-	if item_defaults_json:
-		if isinstance(item_defaults_json, str):
-			try:
-				item_defaults = json.loads(item_defaults_json)
-			except json.JSONDecodeError:
-				pass
-		elif isinstance(item_defaults_json, dict):
-			item_defaults = item_defaults_json
-
-	company = get_default_company(company)
-
-	# Re-validate before creation only when strict validation is enabled
-	strict_validation = getattr(settings, "enable_strict_idp_validation", False)
-	if strict_validation:
-		validation = validate_extraction(extracted_data, target_doctype, company=company)
-		if not validation["valid"]:
-			return {
-				"error": "Validation failed",
-				"validation_errors": validation["errors"],
-				"warnings": validation["warnings"],
-			}
-
-	# Determine whether to auto-create missing masters:
-	# 1. Explicit parameter from LLM (user confirmed) takes priority
-	# 2. Falls back to Chatbot Settings toggle
-	should_auto_create = getattr(settings, "auto_create_idp_masters", False)
-	if create_missing_masters is not None:
-		should_auto_create = str(create_missing_masters).lower() in ("true", "1", "yes")
-
-	created_masters = []
-
-	if should_auto_create:
-		created_masters = _auto_create_missing_masters(
-			extracted_data, target_doctype, company, item_defaults=item_defaults
-		)
 	else:
-		# Check if masters are missing — if so, report them and stop
-		missing_masters = _find_missing_masters(extracted_data, target_doctype, company)
-		if missing_masters:
-			missing_items = [m for m in missing_masters if m["doctype"] == "Item"]
-			missing_parties = [m for m in missing_masters if m["doctype"] in ("Customer", "Supplier")]
-			missing_uoms = [m for m in missing_masters if m["doctype"] == "UOM"]
-			hint_parts = []
-			if missing_parties:
-				names = ", ".join(f"{m['doctype']}: {m['value']}" for m in missing_parties)
-				hint_parts.append(f"Missing: {names}.")
-			if missing_items:
-				names = ", ".join(m["value"] for m in missing_items[:5])
-				hint_parts.append(f"Items not found: {names}.")
-			if missing_uoms:
-				names = ", ".join(m["value"] for m in missing_uoms)
-				hint_parts.append(f"UOMs not found: {names}.")
+		return {"error": "extracted_data_json must be an object or JSON object string"}
 
-			return {
-				"error": "Cannot create record — missing master records in ERPNext.",
-				"missing_masters": missing_masters,
-				"action_required": (
-					" ".join(hint_parts) + " Ask the user if they want to create these masters. If yes, "
-					"ask about Item properties (Is Stock Item?, Is Fixed Asset?, Item Group?) "
-					"then call this tool again with create_missing_masters='true' "
-					"and item_defaults_json."
-				),
-			}
+	# Legacy auto-create flags are deliberately ignored. The proposal engine
+	# detects prerequisites and includes them in the confirmation payload.
+	from ai_chatbot.tools.crud import propose_create_document
 
-	# Create the document using existing create_document infrastructure
-	# ERPNext handles set_missing_values, set_item_defaults, and validate on save
-	try:
-		result = create_document(target_doctype, extracted_data, company=company)
-		if created_masters:
-			result["auto_created_masters"] = created_masters
-		return build_currency_response(result, company)
-	except Exception as e:
-		log_error(f"IDP record creation error: {e!s}", title="IDP")
-		return {"error": f"Failed to create {target_doctype}: {e!s}"}
+	return propose_create_document(target_doctype, extracted_data, company=company)
 
 
 @register_tool(
@@ -557,127 +478,6 @@ def _find_missing_masters(data: dict, target_doctype: str, company: str) -> list
 			missing.append({"doctype": "UOM", "value": uom})
 
 	return missing
-
-
-def _auto_create_missing_masters(
-	data: dict, target_doctype: str, company: str, item_defaults: dict | None = None
-) -> list[str]:
-	"""Auto-create missing master records (Customer, Supplier, Item, UOM).
-
-	Creates minimal records with the extracted name. Returns a list of
-	human-readable descriptions of what was created.
-
-	Args:
-		data: Extracted document data (modified in-place with resolved names).
-		target_doctype: Target ERPNext DocType.
-		company: Company name.
-		item_defaults: Optional dict with Item creation defaults:
-			- is_stock_item (int 0/1, default 0)
-			- is_fixed_asset (int 0/1, default 0)
-			- item_group (str, default from Stock Settings)
-	"""
-	created = []
-	item_defaults = item_defaults or {}
-
-	# Party (Customer / Supplier)
-	for field, master_dt in _PARTY_FIELD_MAP.items():
-		value = data.get(field)
-		if not value:
-			continue
-		dt = master_dt or _infer_party_doctype(target_doctype)
-		if not dt:
-			continue
-
-		# Check if exists by name or display name
-		if frappe.db.exists(dt, value):
-			continue
-		name_field = _get_display_name_field(dt)
-		if name_field:
-			existing = frappe.db.get_value(dt, {name_field: value}, "name")
-			if existing:
-				# Update the data to use the actual record name
-				data[field] = existing
-				continue
-
-		# Create the master
-		try:
-			new_doc = frappe.new_doc(dt)
-			if name_field:
-				new_doc.set(name_field, value)
-			if dt == "Customer":
-				new_doc.customer_type = "Company"
-				new_doc.customer_group = (
-					frappe.db.get_single_value("Selling Settings", "customer_group") or "All Customer Groups"
-				)
-				new_doc.territory = (
-					frappe.db.get_single_value("Selling Settings", "territory") or "All Territories"
-				)
-			elif dt == "Supplier":
-				new_doc.supplier_group = (
-					frappe.db.get_single_value("Buying Settings", "supplier_group") or "All Supplier Groups"
-				)
-			new_doc.insert(ignore_permissions=True)
-			data[field] = new_doc.name
-			created.append(f"{dt}: {new_doc.name}")
-		except Exception as e:
-			log_error(f"IDP auto-create {dt} '{value}' failed: {e!s}", title="IDP")
-
-	# Resolve item defaults
-	is_stock_item = int(item_defaults.get("is_stock_item", 0))
-	is_fixed_asset = int(item_defaults.get("is_fixed_asset", 0))
-	item_group = item_defaults.get("item_group") or (
-		frappe.db.get_single_value("Stock Settings", "item_group") or "All Item Groups"
-	)
-
-	# Items
-	items_table = _get_items_from_data(data)
-	seen_items = set()
-	for item in items_table:
-		item_code = item.get(_ITEM_FIELD)
-		if not item_code or item_code in seen_items:
-			continue
-		seen_items.add(item_code)
-
-		if frappe.db.exists("Item", item_code):
-			continue
-		# Check by item_name
-		existing = frappe.db.get_value("Item", {"item_name": item_code}, "name")
-		if existing:
-			item[_ITEM_FIELD] = existing
-			continue
-
-		# Create Item with user-specified defaults
-		try:
-			new_item = frappe.new_doc("Item")
-			new_item.item_code = item_code
-			new_item.item_name = item.get("item_name") or item_code
-			new_item.description = item.get("description") or item_code
-			new_item.item_group = item_group
-			new_item.stock_uom = item.get("uom") or "Nos"
-			new_item.is_stock_item = is_stock_item
-			new_item.is_fixed_asset = is_fixed_asset
-			new_item.insert(ignore_permissions=True)
-			item[_ITEM_FIELD] = new_item.name
-			created.append(f"Item: {new_item.name}")
-		except Exception as e:
-			log_error(f"IDP auto-create Item '{item_code}' failed: {e!s}", title="IDP")
-
-	# UOM
-	for item in items_table:
-		uom = item.get("uom")
-		if uom and not frappe.db.exists("UOM", uom):
-			try:
-				new_uom = frappe.new_doc("UOM")
-				new_uom.uom_name = uom
-				new_uom.insert(ignore_permissions=True)
-				created.append(f"UOM: {uom}")
-			except Exception as e:
-				log_error(f"IDP auto-create UOM '{uom}' failed: {e!s}", title="IDP")
-
-	if created:
-		frappe.db.commit()
-
-	return created
 
 
 def _infer_party_doctype(target_doctype: str) -> str | None:
