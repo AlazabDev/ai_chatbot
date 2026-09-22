@@ -138,6 +138,14 @@ def _run_streaming_job(conversation_id: str, stream_id: str, ai_provider: str, u
 	"""
 	provider = None
 	try:
+		# Re-validate ownership inside the worker. The queued job runs outside
+		# the request session, so never trust only the caller-side check.
+		conversation_owner = frappe.db.get_value("Chatbot Conversation", conversation_id, "user")
+		if not conversation_owner or conversation_owner != user:
+			raise frappe.PermissionError("Conversation ownership changed or is invalid.")
+
+		frappe.set_user(user)
+
 		# Set conversation context for session tools
 		frappe.flags.current_conversation_id = conversation_id
 
