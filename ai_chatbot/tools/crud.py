@@ -388,10 +388,13 @@ def _store_pending_confirmation(confirmation_id, payload):
 
 	expires_at = add_to_date(now_datetime(), seconds=_CONFIRMATION_TTL).isoformat()
 	payload["expires_at"] = expires_at
-	payload["user"] = frappe.session.user
 
 	key = f"{_CACHE_PREFIX}{confirmation_id}"
-	frappe.cache().set_value(key, json.dumps(payload, default=str), expires_in_sec=_CONFIRMATION_TTL)
+	stored = {
+		"user": frappe.session.user,
+		"payload": payload,
+	}
+	frappe.cache().set_value(key, json.dumps(stored, default=str), expires_in_sec=_CONFIRMATION_TTL)
 
 
 def load_pending_confirmation(confirmation_id, user=None):
@@ -401,11 +404,22 @@ def load_pending_confirmation(confirmation_id, user=None):
 	if not data:
 		return None
 
-	payload = json.loads(data) if isinstance(data, str) else data
+	stored = json.loads(data) if isinstance(data, str) else data
 	current_user = user or frappe.session.user
-	stored_user = payload.get("user")
+
+	# New format keeps ownership metadata outside the user-visible payload.
+	# The legacy shape is accepted only when it contains an explicit owner.
+	if isinstance(stored, dict) and "payload" in stored:
+		stored_user = stored.get("user")
+		payload = stored.get("payload")
+	else:
+		stored_user = stored.get("user") if isinstance(stored, dict) else None
+		payload = stored
+
 	if not stored_user or stored_user != current_user:
 		frappe.throw("You do not have permission to use this confirmation.", frappe.PermissionError)
+	if not isinstance(payload, dict):
+		return None
 	return payload
 
 
