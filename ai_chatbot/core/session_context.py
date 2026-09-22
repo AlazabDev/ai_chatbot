@@ -17,7 +17,7 @@ import json
 
 import frappe
 
-from ai_chatbot.core.config import get_company_currency, get_default_company
+from ai_chatbot.core.config import get_company_currency, get_default_company, has_company_access
 from ai_chatbot.core.consolidation import get_child_companies, is_parent_company
 
 
@@ -84,8 +84,8 @@ def get_companies_for_query(company: str | None = None, conversation_id: str | N
 	if conversation_id:
 		ctx = get_session_context(conversation_id)
 		if ctx.get("include_subsidiaries") and is_parent_company(company):
-			children = get_child_companies(company)
-			companies = [company, *list(children)]
+			children = [child for child in get_child_companies(company) if has_company_access(child)]
+			companies = [company, *children]
 
 	return companies
 
