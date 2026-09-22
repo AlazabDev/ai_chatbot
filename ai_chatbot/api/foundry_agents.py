@@ -22,7 +22,7 @@ def get_foundry_agents() -> dict:
 	try:
 		agents = frappe.get_all(
 			"Foundry Agent",
-			filters={"enabled": 1},
+			filters={"enabled": 1, "foundry_assistant_id": ["!=", ""]},
 			fields=["name", "description", "icon"],
 			order_by="creation",
 		)
