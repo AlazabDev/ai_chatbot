@@ -197,8 +197,12 @@ def execute_step_streaming(
 
 				try:
 					result = BaseTool.execute_tool(func_name, func_args)
-				except Exception as e:
-					result = {"error": str(e)}
+				except Exception:
+					frappe.log_error(
+						frappe.get_traceback(),
+						"AI Chatbot Analyst Tool Execution",
+					)
+					result = {"error": "Tool execution failed."}
 
 				step.tool_calls.append({"name": func_name, "arguments": func_args})
 				step.tool_results.append(result)
