@@ -13,7 +13,7 @@ from ai_chatbot.core.config import get_default_company
 from ai_chatbot.data.validators import check_permission, validate_link_fields
 
 
-def create_document(doctype, values, company=None):
+def create_document(doctype, values, company=None, *, commit=True):
 	"""Create a new document with permission checks and validation.
 
 	Args:
@@ -47,7 +47,8 @@ def create_document(doctype, values, company=None):
 	# Preserve text fields that ERPNext hooks may overwrite during insert
 	_preserve_text_fields(doc, values)
 
-	frappe.db.commit()
+	if commit:
+		frappe.db.commit()
 
 	return {
 		"doctype": doctype,
@@ -57,7 +58,7 @@ def create_document(doctype, values, company=None):
 	}
 
 
-def update_document(doctype, name, values):
+def update_document(doctype, name, values, *, commit=True):
 	"""Update an existing document with permission checks.
 
 	Args:
@@ -87,7 +88,8 @@ def update_document(doctype, name, values):
 	doc = frappe.get_doc(doctype, name)
 	doc.update(values)
 	doc.save()
-	frappe.db.commit()
+	if commit:
+		frappe.db.commit()
 
 	return {
 		"doctype": doctype,
@@ -98,7 +100,7 @@ def update_document(doctype, name, values):
 	}
 
 
-def submit_document(doctype, name):
+def submit_document(doctype, name, *, commit=True):
 	"""Submit a draft document with permission checks.
 
 	Args:
@@ -127,7 +129,8 @@ def submit_document(doctype, name):
 		)
 
 	doc.submit()
-	frappe.db.commit()
+	if commit:
+		frappe.db.commit()
 
 	return {
 		"doctype": doctype,
@@ -137,7 +140,7 @@ def submit_document(doctype, name):
 	}
 
 
-def cancel_document(doctype, name):
+def cancel_document(doctype, name, *, commit=True):
 	"""Cancel a submitted document with permission checks.
 
 	Args:
@@ -166,7 +169,8 @@ def cancel_document(doctype, name):
 		)
 
 	doc.cancel()
-	frappe.db.commit()
+	if commit:
+		frappe.db.commit()
 
 	return {
 		"doctype": doctype,
