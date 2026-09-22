@@ -18,10 +18,11 @@ import json
 import frappe
 
 from ai_chatbot.core.ai_utils import extract_response, extract_tool_info
-from ai_chatbot.core.constants import AUTOMATION_MAX_TOOL_ROUNDS
+from ai_chatbot.core.constants import AUTOMATION_MAX_TOOL_ROUNDS, TOOL_CATEGORIES
 from ai_chatbot.core.prompts import build_system_prompt
 from ai_chatbot.core.token_tracker import track_token_usage
-from ai_chatbot.tools.base import BaseTool, get_all_tools_schema
+from ai_chatbot.tools.base import BaseTool
+from ai_chatbot.tools.registry import get_tools_by_categories
 from ai_chatbot.utils.ai_providers import get_ai_provider
 
 
@@ -67,9 +68,19 @@ def execute_prompt(
 		today = frappe.utils.nowdate()
 		enriched_prompt = f"Today is {today}. You are generating a report for company: {company}.\n\n{prompt}"
 
-		# Get AI provider and tools
+		# Get AI provider and automation-safe tools.
+		#
+		# Scheduled jobs execute as Administrator so they can build cross-module
+		# management reports. That elevated context must never expose generic
+		# write/proposal tools or private-file IDP tools to an autonomous model.
+		# External plugin categories are excluded by default because only the
+		# built-in, explicitly enumerated TOOL_CATEGORIES are considered here.
 		provider = get_ai_provider(ai_provider)
-		tools = get_all_tools_schema() if tools_enabled else None
+		if tools_enabled:
+			automation_categories = set(TOOL_CATEGORIES) - {"operations", "idp"}
+			tools = get_tools_by_categories(automation_categories)
+		else:
+			tools = None
 
 		# Build initial message history
 		history = [
@@ -118,7 +129,19 @@ def execute_prompt(
 				if "company" not in func_args:
 					func_args["company"] = company
 
-				result = BaseTool.execute_tool(func_name, func_args)
+				# Defense in depth: reject categories that are intentionally excluded
+				# from autonomous scheduled execution even if a provider hallucinates
+				# a tool call that was not present in its supplied schema.
+				from ai_chatbot.tools.registry import get_tool_info
+
+				tool_info = get_tool_info(func_name)
+				if not tool_info or tool_info.get("category") not in automation_categories:
+					result = {
+						"success": False,
+						"error": "Tool is not permitted in scheduled automation.",
+					}
+				else:
+					result = BaseTool.execute_tool(func_name, func_args)
 				all_tool_results.append(result)
 
 				history.append(
