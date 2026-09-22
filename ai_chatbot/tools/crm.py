@@ -59,7 +59,7 @@ def get_lead_statistics(from_date=None, to_date=None, company=None):
 	if to_date:
 		filters.append(["creation", "<=", to_date])
 
-	leads = frappe.get_all("Lead", filters=filters, fields=["status"])
+	leads = frappe.get_list("Lead", filters=filters, fields=["status"])
 
 	status_count = {}
 	for lead in leads:
@@ -138,7 +138,7 @@ def _opportunity_pipeline(status, company):
 	if status:
 		filters["status"] = status
 
-	opportunities = frappe.get_all(
+	opportunities = frappe.get_list(
 		"Opportunity",
 		filters=filters,
 		fields=["name", "opportunity_amount", "currency", "status", "sales_stage", "party_name"],
@@ -308,7 +308,7 @@ def get_lead_conversion_rate(from_date=None, to_date=None, company=None):
 		["creation", "<=", to_date],
 	]
 
-	leads = frappe.get_all("Lead", filters=filters, fields=["status"])
+	leads = frappe.get_list("Lead", filters=filters, fields=["status"])
 
 	total = len(leads)
 	converted_statuses = {"Opportunity", "Converted", "Quotation"}
