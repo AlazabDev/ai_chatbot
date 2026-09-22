@@ -32,9 +32,13 @@ export default defineConfig({
         main: path.resolve(__dirname, 'index.html'),
       },
       output: {
-        manualChunks: {
-          'vue-vendor': ['vue', 'vue-router'],
-          'icons': ['lucide-vue-next'],
+        manualChunks(id) {
+          if (id.includes('/node_modules/zrender/')) return 'zrender'
+          if (id.includes('/node_modules/echarts/lib/chart/')) return 'echarts-charts'
+          if (id.includes('/node_modules/echarts/lib/component/')) return 'echarts-components'
+          if (id.includes('/node_modules/echarts/')) return 'echarts-core'
+          if (id.includes('/node_modules/vue/') || id.includes('/node_modules/vue-router/')) return 'vue-vendor'
+          if (id.includes('/node_modules/lucide-vue-next/')) return 'icons'
         },
       },
     },
