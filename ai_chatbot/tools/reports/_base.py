@@ -351,7 +351,7 @@ def resolve_report_template(report_type: str) -> str:
 		return ""
 
 	try:
-		templates = frappe.get_all(
+		templates = frappe.get_list(
 			"Financial Report Template",
 			filters={"report_type": report_type_label, "disabled": 0},
 			pluck="name",
