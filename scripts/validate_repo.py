@@ -16,6 +16,30 @@ def fail(message: str) -> None:
     errors.append(message)
 
 
+# Production repository structure must keep backend and frontend sources
+# separated. Python files under frontend/ are stale duplicates, not runtime code.
+frontend_dir = ROOT / "frontend"
+for path in sorted(frontend_dir.rglob("*.py")):
+    fail(f"{path.relative_to(ROOT)}: Python backend source must not live under frontend/")
+
+
+# All ERP write operations must pass through the proposal/confirmation flow.
+for relative in (
+    "ai_chatbot/tools/operations/create.py",
+    "ai_chatbot/tools/operations/update.py",
+):
+    if (ROOT / relative).exists():
+        fail(f"{relative}: direct-write legacy tool must not be present")
+
+
+# This app relies on ERPNext DocTypes and must declare that runtime dependency.
+hooks_path = APP / "hooks.py"
+if hooks_path.exists():
+    hooks_text = hooks_path.read_text(encoding="utf-8")
+    if 'required_apps = ["erpnext"]' not in hooks_text:
+        fail("ai_chatbot/hooks.py: ERPNext must be declared in required_apps")
+
+
 # Every committed JSON file must parse.
 for path in sorted(APP.rglob("*.json")):
     try:
