@@ -303,7 +303,7 @@ const renderedContent = computed(() => {
       return escapeHtml(props.message.content || '').replace(/\n/g, '<br>')
     }
   }
-  return props.message.content
+  return escapeHtml(props.message.content || '').replace(/\n/g, '<br>')
 })
 
 // Detect "fully blank bubble" — content strips to nothing AND no visual section
