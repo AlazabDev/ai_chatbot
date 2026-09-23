@@ -31,32 +31,36 @@ def is_erpnext_installed():
 	return is_app_installed("erpnext")
 
 
+def _assert_company_access(company: str) -> str:
+	"""Return *company* only when the current user may read that Company document."""
+	if not company:
+		return company
+
+	if not frappe.has_permission(
+		"Company",
+		"read",
+		doc=company,
+		user=frappe.session.user,
+	):
+		frappe.throw(
+			"Company is unavailable or you do not have permission to access it.",
+			frappe.PermissionError,
+		)
+	return company
+
+
 def get_default_company(company=None):
-	"""Get the effective company — passed value, user default, or global default.
-
-	When an explicit company name is passed, it is validated against the DB.
-	If the exact name isn't found, a fuzzy (LIKE) lookup is attempted so that
-	"Tara Technologies" correctly resolves to "Tara Technologies (Demo)".
-
-	Args:
-		company: Explicitly passed company name. If provided and valid, returned as-is.
-
-	Returns:
-		Company name string.
-
-	Raises:
-		ai_chatbot.core.exceptions.CompanyRequiredError: If no company can be resolved.
-	"""
+	"""Resolve an explicit or configured Company without bypassing User Permissions."""
 	if company:
 		return _resolve_company_name(company)
 
-	company = frappe.defaults.get_user_default("Company")
-	if company:
-		return company
+	user_default = frappe.defaults.get_user_default("Company")
+	if user_default:
+		return _assert_company_access(user_default)
 
-	company = frappe.defaults.get_global_default("company")
-	if company:
-		return company
+	global_default = frappe.defaults.get_global_default("company")
+	if global_default:
+		return _assert_company_access(global_default)
 
 	from ai_chatbot.core.exceptions import CompanyRequiredError
 
@@ -64,18 +68,17 @@ def get_default_company(company=None):
 
 
 def _resolve_company_name(name: str) -> str:
-	"""Resolve an AI-provided company name to the exact DB name.
+	"""Resolve an AI-provided company name only across Companies visible to the user."""
+	exact = frappe.get_list(
+		"Company",
+		filters={"name": name},
+		pluck="name",
+		limit_page_length=1,
+	)
+	if exact:
+		return exact[0]
 
-	Tries exact match first, then LIKE match for partial/fuzzy names.
-	Returns the original name if no match is found (lets the caller
-	handle the empty result set).
-	"""
-	# Exact match — fast path
-	if frappe.db.exists("Company", name):
-		return name
-
-	# Fuzzy match: "Tara Technologies" → "Tara Technologies (Demo)"
-	matches = frappe.get_all(
+	matches = frappe.get_list(
 		"Company",
 		filters={"name": ["like", f"%{name}%"]},
 		pluck="name",
@@ -83,12 +86,17 @@ def _resolve_company_name(name: str) -> str:
 	)
 	if len(matches) == 1:
 		return matches[0]
-
-	# Multiple matches — prefer the shortest name (closest match)
 	if matches:
 		return min(matches, key=len)
 
-	# No match at all — return as-is
+	# Distinguish a denied existing company from a genuinely unknown name
+	# without ever returning a denied Company into downstream direct queries.
+	if frappe.db.exists("Company", name):
+		frappe.throw(
+			"Company is unavailable or you do not have permission to access it.",
+			frappe.PermissionError,
+		)
+
 	return name
 
 
@@ -119,14 +127,8 @@ def get_fiscal_year_dates(company=None):
 
 
 def get_company_currency(company):
-	"""Get the default currency for a company.
-
-	Args:
-		company: Company name.
-
-	Returns:
-		Currency code string (e.g. "USD", "INR").
-	"""
+	"""Get a Company's currency after enforcing document-level read permission."""
+	_assert_company_access(company)
 	return frappe.get_cached_value("Company", company, "default_currency")
 
 
