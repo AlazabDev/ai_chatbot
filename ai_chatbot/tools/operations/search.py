@@ -42,7 +42,7 @@ def search_customers(query=None, customer_group=None, territory=None, limit=10, 
 	if territory:
 		filters["territory"] = territory
 
-	customers = frappe.get_all(
+	customers = frappe.get_list(
 		"Customer",
 		filters=filters,
 		or_filters=or_filters,
@@ -87,7 +87,7 @@ def search_items(query=None, item_group=None, limit=10, company=None):
 	if item_group:
 		filters["item_group"] = item_group
 
-	items = frappe.get_all(
+	items = frappe.get_list(
 		"Item",
 		filters=filters,
 		or_filters=or_filters,
@@ -123,6 +123,21 @@ def search_documents(doctype=None, query=None, status=None, limit=10, company=No
 	"""Search documents of a specified DocType."""
 	if not doctype:
 		return {"error": "doctype parameter is required"}
+
+	if not frappe.db.exists("DocType", doctype):
+		return {"error": f"Unknown DocType: {doctype}"}
+
+	if not frappe.has_permission(doctype, "read", user=frappe.session.user):
+		frappe.throw(
+			f"You do not have permission to read {doctype}.",
+			frappe.PermissionError,
+		)
+
+	try:
+		limit = int(limit or 10)
+	except (TypeError, ValueError):
+		limit = 10
+	limit = max(1, min(limit, 50))
 
 	company = get_default_company(company)
 
@@ -166,7 +181,7 @@ def search_documents(doctype=None, query=None, status=None, limit=10, company=No
 		if meta.has_field(fname):
 			fields.append(fname)
 
-	documents = frappe.get_all(
+	documents = frappe.get_list(
 		doctype,
 		filters=filters,
 		or_filters=or_filters,
