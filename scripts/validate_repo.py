@@ -149,6 +149,39 @@ if search_path.exists():
     if 'frappe.has_permission(doctype, "read"' not in search_text:
         fail("operations/search.py: dynamic DocType read permission check is missing")
 
+registry_path = APP / "tools/registry.py"
+if registry_path.exists():
+    registry_text = registry_path.read_text(encoding="utf-8")
+    for expected in (
+        "row_permission_safe=False",
+        "def _has_row_scope(",
+        "def _tool_access_error(",
+        "DatabaseQuery(doctype, user=user).build_match_conditions()",
+    ):
+        if expected not in registry_text:
+            fail(f"tools/registry.py: row-scope protection missing: {expected}")
+
+config_path = APP / "core/config.py"
+if config_path.exists():
+    config_text = config_path.read_text(encoding="utf-8")
+    if "def _assert_company_access(" not in config_text:
+        fail("core/config.py: Company access guard is missing")
+    if 'matches = frappe.get_all(' in config_text:
+        fail("core/config.py: Company fuzzy resolution must not bypass permissions")
+    if 'matches = frappe.get_list(' not in config_text:
+        fail("core/config.py: permission-aware Company resolution is missing")
+
+chat_message_path = ROOT / "frontend/src/components/ChatMessage.vue"
+if chat_message_path.exists():
+    chat_message_text = chat_message_path.read_text(encoding="utf-8")
+    if 'v-html="renderedContent"' in chat_message_text:
+        if "import { renderMarkdown } from '../utils/markdown'" not in chat_message_text:
+            fail("ChatMessage.vue: v-html must be fed by the safe markdown renderer")
+        if "return props.message.content" in chat_message_text:
+            fail("ChatMessage.vue: raw message content must never be returned to v-html")
+        if "return escapeHtml(props.message.content || '')" not in chat_message_text:
+            fail("ChatMessage.vue: renderer failure must fall back to escaped text")
+
 
 if errors:
     print("Repository validation FAILED:", file=sys.stderr)
