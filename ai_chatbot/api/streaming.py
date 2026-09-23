@@ -56,16 +56,25 @@ def send_message_streaming(
 		is_retry = is_retry in (True, "true", "True", "1", 1)
 
 		# Validate conversation ownership
+		from ai_chatbot.core.permissions import conversation_has_permission
+
 		conversation = frappe.get_doc("Chatbot Conversation", conversation_id)
-		if conversation.user != frappe.session.user:
-			frappe.throw("Unauthorized access to conversation")
+		if not conversation_has_permission(
+			conversation,
+			user=frappe.session.user,
+			permission_type="read",
+		):
+			frappe.throw(
+				"You do not have permission to access this conversation.",
+				frappe.PermissionError,
+			)
 
 		# Generate a unique stream ID for this request
 		stream_id = str(uuid.uuid4())[:8]
 
 		if is_retry:
 			# Remove any incomplete assistant message from the failed attempt
-			incomplete_msgs = frappe.get_all(
+			incomplete_msgs = frappe.get_list(
 				"Chatbot Message",
 				filters={
 					"conversation": conversation_id,
@@ -111,7 +120,7 @@ def send_message_streaming(
 
 	except Exception as e:
 		log_error(f"Streaming error: {e!s}", title="Streaming")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _friendly_error_message(e)}
 
 
 def _run_streaming_job(conversation_id: str, stream_id: str, ai_provider: str, user: str):
@@ -339,7 +348,7 @@ def _run_streaming_job(conversation_id: str, stream_id: str, ai_provider: str, u
 
 		# Auto-generate title from first user message
 		if conversation.title == "New Chat" and conversation.message_count == 2:
-			first_msg = frappe.get_all(
+			first_msg = frappe.get_list(
 				"Chatbot Message",
 				filters={"conversation": conversation_id, "role": "user"},
 				fields=["content"],
@@ -425,7 +434,15 @@ def _friendly_error_message(error: Exception) -> str:
 	# instead of re-running heuristics over their text.
 	from ai_chatbot.core.exceptions import ChatbotError
 
-	if isinstance(error, ChatbotError):
+	if isinstance(
+		error,
+		(
+			ChatbotError,
+			frappe.PermissionError,
+			frappe.ValidationError,
+			frappe.DoesNotExistError,
+		),
+	):
 		return str(error)
 
 	msg = str(error).lower()
@@ -658,7 +675,7 @@ def _stream_with_tools(
 					f"Tool execution failed: {tc['name']}: {e!s}",
 					title="Streaming Tool Error",
 				)
-				result = {"error": str(e)}
+				result = {"error": _friendly_error_message(e)}
 
 			loop_guard.record_call(tc["name"], tc["arguments"])
 			all_tool_results.append(result)
