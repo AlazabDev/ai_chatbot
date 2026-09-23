@@ -43,6 +43,7 @@ def _get_current_conversation_id():
 		},
 	},
 	doctypes=["Company"],
+	row_permission_safe=True,
 )
 def set_include_subsidiaries(include=True):
 	"""Toggle subsidiary inclusion for the current chat session."""
@@ -99,6 +100,7 @@ def set_include_subsidiaries(include=True):
 		},
 	},
 	doctypes=["Company"],
+	row_permission_safe=True,
 )
 def set_target_currency(currency=None):
 	"""Set or reset the target display currency for the current chat session."""
