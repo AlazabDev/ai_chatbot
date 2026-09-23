@@ -1,84 +1,84 @@
 {
- "actions": [],
- "allow_rename": 0,
- "autoname": "field:agent_key",
- "creation": "2026-09-22 00:00:00.000000",
- "doctype": "DocType",
- "engine": "InnoDB",
- "field_order": [
-  "agent_key",
-  "icon",
-  "column_break_1",
-  "enabled",
-  "description",
-  "foundry_assistant_id"
- ],
- "fields": [
-  {
-   "fieldname": "agent_key",
-   "fieldtype": "Data",
-   "in_list_view": 1,
-   "label": "Agent Key",
-   "reqd": 1,
-   "unique": 1,
-   "description": "Short internal name, e.g. az-agent-finance. Used as the record name."
-  },
-  {
-   "fieldname": "icon",
-   "fieldtype": "Data",
-   "label": "Icon",
-   "length": 4,
-   "description": "Single emoji shown next to the agent in the chat picker (optional)."
-  },
-  {
-   "fieldname": "column_break_1",
-   "fieldtype": "Column Break"
-  },
-  {
-   "default": "1",
-   "fieldname": "enabled",
-   "fieldtype": "Check",
-   "in_list_view": 1,
-   "label": "Enabled"
-  },
-  {
-   "fieldname": "description",
-   "fieldtype": "Small Text",
-   "in_list_view": 1,
-   "label": "Description",
-   "description": "Shown to the user in the agent picker — what this agent is for."
-  },
-  {
-   "fieldname": "foundry_assistant_id",
-   "fieldtype": "Data",
-   "label": "Foundry Assistant ID",
-   "reqd": 1,
-   "description": "The asst_... id of this agent on Azure AI Foundry (Threads/Runs API). Never sent to the frontend."
-  }
- ],
- "index_web_pages_for_search": 1,
- "links": [],
- "modified": "2026-09-22 00:00:00.000000",
- "modified_by": "Administrator",
- "module": "Chatbot",
- "name": "Foundry Agent",
- "owner": "Administrator",
- "permissions": [
-  {
-   "create": 1,
-   "delete": 1,
-   "email": 1,
-   "export": 1,
-   "print": 1,
-   "read": 1,
-   "report": 1,
-   "role": "System Manager",
-   "share": 1,
-   "write": 1
-  }
- ],
- "sort_field": "creation",
- "sort_order": "ASC",
- "states": [],
- "track_changes": 1
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "field:agent_key",
+  "creation": "2026-09-22 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "agent_key",
+    "icon",
+    "column_break_1",
+    "enabled",
+    "description",
+    "foundry_assistant_id"
+  ],
+  "fields": [
+    {
+      "fieldname": "agent_key",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Agent Key",
+      "reqd": 1,
+      "unique": 1,
+      "description": "Short internal name, e.g. az-agent-finance. Used as the record name."
+    },
+    {
+      "fieldname": "icon",
+      "fieldtype": "Data",
+      "label": "Icon",
+      "length": 4,
+      "description": "Single emoji shown next to the agent in the chat picker (optional)."
+    },
+    {
+      "fieldname": "column_break_1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "default": "1",
+      "fieldname": "enabled",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Enabled"
+    },
+    {
+      "fieldname": "description",
+      "fieldtype": "Small Text",
+      "in_list_view": 1,
+      "label": "Description",
+      "description": "Shown to the user in the agent picker — what this agent is for."
+    },
+    {
+      "fieldname": "foundry_assistant_id",
+      "fieldtype": "Data",
+      "label": "Foundry Assistant ID",
+      "reqd": 0,
+      "description": "The asst_... id of this agent on Azure AI Foundry (Threads/Runs API). Never sent to the frontend."
+    }
+  ],
+  "index_web_pages_for_search": 1,
+  "links": [],
+  "modified": "2026-09-22 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Chatbot",
+  "name": "Foundry Agent",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "creation",
+  "sort_order": "ASC",
+  "states": [],
+  "track_changes": 1
 }
