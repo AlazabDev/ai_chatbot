@@ -375,49 +375,53 @@ def propose_cancel_document(doctype, name):
 
 
 def _store_pending_confirmation(confirmation_id, payload):
-	"""Store a pending confirmation payload in Redis with TTL.
-
-	Also stamps ``expires_at`` (ISO datetime) into the payload so the
-	frontend can display a countdown timer to the user.
-
-	Args:
-		confirmation_id: Unique UUID string.
-		payload: Dict to store (will be JSON-serialized).
-	"""
+	"""Store a user-bound pending confirmation payload in Redis with TTL."""
 	from frappe.utils import add_to_date, now_datetime
 
 	expires_at = add_to_date(now_datetime(), seconds=_CONFIRMATION_TTL).isoformat()
 	payload["expires_at"] = expires_at
 
+	stored = {
+		"user": frappe.session.user,
+		"payload": payload,
+	}
 	key = f"{_CACHE_PREFIX}{confirmation_id}"
-	frappe.cache().set_value(key, json.dumps(payload, default=str), expires_in_sec=_CONFIRMATION_TTL)
+	frappe.cache().set_value(
+		key,
+		json.dumps(stored, default=str),
+		expires_in_sec=_CONFIRMATION_TTL,
+	)
 
 
-def load_pending_confirmation(confirmation_id):
-	"""Load a pending confirmation payload from Redis.
-
-	Returns None if the confirmation has expired or doesn't exist.
-	Does NOT delete the entry (allows re-reads for display).
-
-	Args:
-		confirmation_id: UUID string.
-
-	Returns:
-		Dict payload or None.
-	"""
+def load_pending_confirmation(confirmation_id, user=None):
+	"""Load a pending confirmation only for the user who created it."""
+	user = user or frappe.session.user
 	key = f"{_CACHE_PREFIX}{confirmation_id}"
 	data = frappe.cache().get_value(key)
 	if not data:
 		return None
-	return json.loads(data) if isinstance(data, str) else data
+
+	stored = json.loads(data) if isinstance(data, str) else data
+	if not isinstance(stored, dict):
+		return None
+
+	stored_user = stored.get("user")
+	payload = stored.get("payload")
+	if not stored_user or not isinstance(payload, dict):
+		return None
+
+	if stored_user != user:
+		frappe.throw(
+			"You do not have permission to use this confirmation.",
+			frappe.PermissionError,
+		)
+
+	return payload
 
 
-def delete_pending_confirmation(confirmation_id):
-	"""Delete a pending confirmation from Redis.
-
-	Args:
-		confirmation_id: UUID string.
-	"""
+def delete_pending_confirmation(confirmation_id, user=None):
+	"""Delete a pending confirmation after validating token ownership."""
+	load_pending_confirmation(confirmation_id, user=user)
 	key = f"{_CACHE_PREFIX}{confirmation_id}"
 	frappe.cache().delete_value(key)
 
