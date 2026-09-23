@@ -269,6 +269,12 @@ def undo_action(undo_token: str) -> dict:
 			}
 
 		metadata = json.loads(data) if isinstance(data, str) else data
+		if metadata.get("user") != frappe.session.user:
+			frappe.throw(
+				"You do not have permission to use this undo token.",
+				frappe.PermissionError,
+			)
+
 		action = metadata.get("action")
 		doctype = metadata.get("doctype")
 		name = metadata.get("name")
