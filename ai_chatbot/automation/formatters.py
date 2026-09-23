@@ -19,6 +19,7 @@ HTML element needs inline CSS.
 
 from __future__ import annotations
 
+import html as html_lib
 import json
 import re
 import shutil
@@ -224,26 +225,27 @@ def _fix_markdown_lists(content: str) -> str:
 
 
 def _markdown_to_html(content: str) -> str:
-	"""Convert markdown to HTML.
-
-	Uses frappe.utils.md_to_html when available, falls back to
-	basic HTML wrapping.
-	"""
+	"""Convert untrusted markdown to sanitized HTML."""
 	if not content:
 		return ""
 
 	try:
-		return frappe.utils.md_to_html(content)
+		return frappe.utils.markdown(content, sanitize=True)
 	except Exception:
-		# Fallback: wrap in paragraph tags with basic line break handling
+		# Fail closed if the markdown helper is unavailable.
 		paragraphs = content.split("\n\n")
 		html_parts = []
 		for p in paragraphs:
 			p = p.strip()
 			if p:
-				p = p.replace("\n", "<br>")
-				html_parts.append(f"<p>{p}</p>")
+				safe = html_lib.escape(p, quote=True).replace("\n", "<br>")
+				html_parts.append(f"<p>{safe}</p>")
 		return "\n".join(html_parts)
+
+
+def _escape_html_value(value) -> str:
+	"""Escape dynamic values before interpolating them into generated HTML."""
+	return html_lib.escape(str(value if value is not None else ""), quote=True)
 
 
 def _style_html_tables(html: str) -> str:
@@ -374,7 +376,9 @@ def _build_email_template(body_html: str, report_name: str, company: str) -> str
 		Complete HTML email document.
 	"""
 	today = nowdate()
-	subtitle = f" — {company}" if company else ""
+	safe_report_name = _escape_html_value(report_name)
+	safe_company = _escape_html_value(company)
+	subtitle = f" — {safe_company}" if safe_company else ""
 
 	return f"""<!DOCTYPE html>
 <html>
@@ -388,7 +392,7 @@ font-size: 14px; line-height: 1.6; color: #333; text-align: left; max-width: 800
 
 <div style="background-color: #f8f9fa; border-bottom: 3px solid #4a90d9; padding: 20px; \
 margin-bottom: 20px; border-radius: 4px 4px 0 0;">
-<h2 style="margin: 0 0 5px; color: #2c3e50; text-align: left;">{report_name}</h2>
+<h2 style="margin: 0 0 5px; color: #2c3e50; text-align: left;">{safe_report_name}</h2>
 <p style="margin: 0; color: #7f8c8d; font-size: 14px;">{today}{subtitle}</p>
 </div>
 
@@ -600,16 +604,25 @@ def _pie_to_table(title: str, data: list[dict]) -> str:
 	rows = []
 	total = sum(d.get("value", 0) for d in data if isinstance(d.get("value"), int | float))
 	for d in data:
-		name = d.get("name", "")
+		name = _escape_html_value(d.get("name", ""))
 		value = d.get("value", 0)
-		pct = f"{(value / total * 100):.1f}%" if total else ""
+		if isinstance(value, int | float):
+			display_value = f"{value:,.2f}"
+			pct = f"{(value / total * 100):.1f}%" if total else ""
+		else:
+			display_value = _escape_html_value(value)
+			pct = ""
 		rows.append(
 			f"<tr><td style='{td}'>{name}</td>"
-			f"<td style='{td_r}'>{value:,.2f}</td>"
+			f"<td style='{td_r}'>{display_value}</td>"
 			f"<td style='{td_r}'>{pct}</td></tr>"
 		)
 
-	title_html = f"<h4 style='margin: 15px 0 8px; color: #2c3e50;'>{title}</h4>" if title else ""
+	title_html = (
+		f"<h4 style='margin: 15px 0 8px; color: #2c3e50;'>{_escape_html_value(title)}</h4>"
+		if title
+		else ""
+	)
 
 	return f"""{title_html}
 <table style='border-collapse: collapse; width: 100%; margin-bottom: 15px;'>
@@ -634,13 +647,13 @@ def _series_to_table(title: str, categories: list, series_list: list[dict]) -> s
 	# Build header: Category + one column per series
 	headers = [f"<th style='{th}'>Category</th>"]
 	for s in series_list:
-		name = s.get("name") or title or "Value"
+		name = _escape_html_value(s.get("name") or title or "Value")
 		headers.append(f"<th style='{th} text-align: right;'>{name}</th>")
 
 	# Build rows
 	rows = []
 	for i, cat in enumerate(categories):
-		cells = [f"<td style='{td}'>{cat}</td>"]
+		cells = [f"<td style='{td}'>{_escape_html_value(cat)}</td>"]
 		for s in series_list:
 			data = s.get("data", [])
 			val = data[i] if i < len(data) else ""
@@ -649,10 +662,16 @@ def _series_to_table(title: str, categories: list, series_list: list[dict]) -> s
 				val = val.get("value", "")
 			if isinstance(val, int | float):
 				val = f"{val:,.2f}"
+			else:
+				val = _escape_html_value(val)
 			cells.append(f"<td style='{td_r}'>{val}</td>")
 		rows.append(f"<tr>{''.join(cells)}</tr>")
 
-	title_html = f"<h4 style='margin: 15px 0 8px; color: #2c3e50;'>{title}</h4>" if title else ""
+	title_html = (
+		f"<h4 style='margin: 15px 0 8px; color: #2c3e50;'>{_escape_html_value(title)}</h4>"
+		if title
+		else ""
+	)
 
 	return f"""{title_html}
 <table style='border-collapse: collapse; width: 100%; margin-bottom: 15px;'>
