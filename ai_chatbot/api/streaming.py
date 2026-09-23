@@ -121,7 +121,18 @@ def _run_streaming_job(conversation_id: str, stream_id: str, ai_provider: str, u
 	Publishes tokens via frappe.publish_realtime as they arrive.
 	"""
 	try:
-		# Set conversation context for session tools
+		conversation_owner = frappe.db.get_value(
+			"Chatbot Conversation",
+			conversation_id,
+			"user",
+		)
+		if not conversation_owner or conversation_owner != user:
+			raise frappe.PermissionError(
+				"Conversation ownership changed or is invalid."
+			)
+
+		# Background workers must execute tools under the requesting user's identity.
+		frappe.set_user(user)
 		frappe.flags.current_conversation_id = conversation_id
 
 		log_info("Streaming job started", conversation_id=conversation_id, provider=ai_provider)
