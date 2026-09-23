@@ -11,6 +11,7 @@
     <script>
         window.csrf_token = "{{ csrf_token }}";
         window.site_name = "{{ site_name }}";
+        window.socketio_port = {{ (frappe.socketio_port or 9000) }};
         if (!window.frappe) window.frappe = {};
         frappe.boot = {{ boot }};
     </script>
