@@ -37,7 +37,15 @@ def _user_facing_error(error: Exception) -> str:
 	a generic notice — the original exception is logged separately, so no
 	information is lost; it just doesn't get rendered to the end user.
 	"""
-	if isinstance(error, ChatbotError):
+	if isinstance(
+		error,
+		(
+			ChatbotError,
+			frappe.PermissionError,
+			frappe.ValidationError,
+			frappe.DoesNotExistError,
+		),
+	):
 		return str(error)
 	return _FALLBACK_USER_ERROR
 
@@ -97,7 +105,7 @@ def create_conversation(title: str, ai_provider: str = "OpenAI", foundry_agent: 
 		}
 	except Exception as e:
 		log_error(f"Error creating conversation: {e!s}", title="Chat API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 @frappe.whitelist()
@@ -118,7 +126,7 @@ def get_conversations(limit: int = 20) -> dict:
 		}
 	except Exception as e:
 		log_error(f"Error getting conversations: {e!s}", title="Chat API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 @frappe.whitelist()
@@ -198,7 +206,7 @@ def get_conversation_messages(conversation_id: str) -> dict:
 		}
 	except Exception as e:
 		log_error(f"Error getting messages: {e!s}", title="Chat API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 @frappe.whitelist()
@@ -597,7 +605,7 @@ def delete_conversation(conversation_id: str) -> dict:
 		return {"success": True}
 	except Exception as e:
 		log_error(f"Error deleting conversation: {e!s}", title="Chat API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 @frappe.whitelist()
@@ -614,7 +622,7 @@ def update_conversation_title(conversation_id: str, title: str) -> dict:
 		return {"success": True}
 	except Exception as e:
 		log_error(f"Error updating title: {e!s}", title="Chat API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 @frappe.whitelist()
@@ -642,7 +650,7 @@ def set_conversation_language(conversation_id: str, language: str = "") -> dict:
 		return {"success": True, "language": language}
 	except Exception as e:
 		log_error(f"Error setting conversation language: {e!s}", title="Chat API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 @frappe.whitelist()
@@ -699,7 +707,7 @@ def get_settings() -> dict:
 		}
 	except Exception as e:
 		log_error(f"Error getting settings: {e!s}", title="Chat API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 @frappe.whitelist()
@@ -781,7 +789,7 @@ def get_sample_prompts() -> dict:
 		return {"success": True, "categories": categories, "mentions": mentions}
 	except Exception as e:
 		log_error(f"Error loading sample prompts: {e!s}", title="Chat API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 @frappe.whitelist()
@@ -860,7 +868,7 @@ def search_conversations(query: str, limit: int = 20) -> dict:
 		}
 	except Exception as e:
 		log_error(f"Search conversations error: {e!s}", title="Chat API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 @frappe.whitelist()
@@ -934,7 +942,7 @@ def get_mention_values(mention_type: str, search_term: str = "", company: str | 
 
 	except Exception as e:
 		log_error(f"Mention values error: {e!s}", title="Chat API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 def _get_period_presets(company: str | None = None) -> list[dict]:
