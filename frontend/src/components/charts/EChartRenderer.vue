@@ -61,9 +61,10 @@ onMounted(async () => {
   if (!chartContainer.value) return
 
   // Lazy-load echarts to avoid blocking initial page load
-  const echartsModule = await import('echarts')
+  const echartsModule = await import('../../utils/echarts')
+  const echarts = echartsModule.default
   const theme = isDarkMode() ? 'dark' : undefined
-  const chart = echartsModule.init(chartContainer.value, theme)
+  const chart = echarts.init(chartContainer.value, theme)
   chartInstance.value = chart
 
   // For dark theme, set transparent background so it blends with the message bubble
@@ -87,7 +88,7 @@ onMounted(async () => {
     if (chartInstance.value) {
       chartInstance.value.dispose()
     }
-    const newChart = echartsModule.init(chartContainer.value, newTheme)
+    const newChart = echarts.init(chartContainer.value, newTheme)
     const newOption = { ...props.option }
     if (nowDark) {
       newOption.backgroundColor = 'transparent'
