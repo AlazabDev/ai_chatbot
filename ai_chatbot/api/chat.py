@@ -42,6 +42,23 @@ def _user_facing_error(error: Exception) -> str:
 	return _FALLBACK_USER_ERROR
 
 
+def _get_owned_conversation(conversation_id: str):
+	"""Return a conversation only when the current user may access it."""
+	from ai_chatbot.core.permissions import conversation_has_permission
+
+	conversation = frappe.get_doc("Chatbot Conversation", conversation_id)
+	if not conversation_has_permission(
+		conversation,
+		user=frappe.session.user,
+		permission_type="read",
+	):
+		frappe.throw(
+			"You do not have permission to access this conversation.",
+			frappe.PermissionError,
+		)
+	return conversation
+
+
 @frappe.whitelist()
 def create_conversation(title: str, ai_provider: str = "OpenAI", foundry_agent: str | None = None) -> dict:
 	"""Create a new chat conversation.
@@ -61,6 +78,12 @@ def create_conversation(title: str, ai_provider: str = "OpenAI", foundry_agent: 
 			"updated_at": frappe.utils.now(),
 		}
 		if ai_provider == "Azure AI Foundry Agent" and foundry_agent:
+			agent = frappe.get_doc("Foundry Agent", foundry_agent)
+			if not agent.enabled or not agent.foundry_assistant_id:
+				frappe.throw(
+					"Selected Foundry Agent is not enabled or configured.",
+					frappe.ValidationError,
+				)
 			doc_fields["foundry_agent"] = foundry_agent
 
 		conversation = frappe.get_doc(doc_fields)
@@ -81,7 +104,7 @@ def create_conversation(title: str, ai_provider: str = "OpenAI", foundry_agent: 
 def get_conversations(limit: int = 20) -> dict:
 	"""Get user's conversations"""
 	try:
-		conversations = frappe.get_all(
+		conversations = frappe.get_list(
 			"Chatbot Conversation",
 			filters={"user": frappe.session.user},
 			fields=["name", "title", "ai_provider", "status", "created_at", "updated_at", "message_count"],
@@ -102,7 +125,8 @@ def get_conversations(limit: int = 20) -> dict:
 def get_conversation_messages(conversation_id: str) -> dict:
 	"""Get messages for a conversation"""
 	try:
-		messages = frappe.get_all(
+		_get_owned_conversation(conversation_id)
+		messages = frappe.get_list(
 			"Chatbot Message",
 			filters={"conversation": conversation_id},
 			fields=[
@@ -208,10 +232,8 @@ def send_message(
 				conversation_id, message, attachments=attachments, is_retry=is_retry
 			)
 
-		# Validate conversation
-		conversation = frappe.get_doc("Chatbot Conversation", conversation_id)
-		if conversation.user != frappe.session.user:
-			frappe.throw("Unauthorized access to conversation")
+		# Validate conversation ownership
+		conversation = _get_owned_conversation(conversation_id)
 
 		# Set conversation context for session tools
 		frappe.flags.current_conversation_id = conversation_id
