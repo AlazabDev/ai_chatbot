@@ -18,7 +18,6 @@
 
 import { ref } from 'vue'
 import { Manager } from 'socket.io-client'
-import { socketio_port } from '../../../../../sites/common_site_config.json'
 
 let socket = null
 let manager = null
@@ -87,7 +86,8 @@ function initSocket() {
   try {
     const host = window.location.hostname
     const siteName = window.site_name || window.location.hostname
-    const port = window.location.port ? `:${socketio_port}` : ''
+    const socketioPort = Number(window.socketio_port || 9000)
+    const port = window.location.port ? `:${socketioPort}` : ''
     const protocol = window.location.protocol
     const baseUrl = `${protocol}//${host}${port}`
 

@@ -14,6 +14,7 @@ import mimetypes
 import frappe
 
 from ai_chatbot.core.logger import log_error
+from ai_chatbot.core.permissions import conversation_has_permission
 
 # Allowed MIME types for upload
 ALLOWED_MIME_TYPES = {
@@ -51,8 +52,15 @@ def upload_chat_file(conversation_id: str) -> dict:
 	try:
 		# Validate conversation ownership
 		conversation = frappe.get_doc("Chatbot Conversation", conversation_id)
-		if conversation.user != frappe.session.user:
-			frappe.throw("Unauthorized access to conversation")
+		if not conversation_has_permission(
+			conversation,
+			user=frappe.session.user,
+			permission_type="read",
+		):
+			frappe.throw(
+				"You do not have permission to access this conversation.",
+				frappe.PermissionError,
+			)
 
 		# Get the uploaded file from request
 		if not frappe.request or not frappe.request.files:
@@ -105,9 +113,11 @@ def upload_chat_file(conversation_id: str) -> dict:
 
 		return result
 
+	except frappe.PermissionError:
+		raise
 	except Exception as e:
 		log_error(f"File upload error: {e!s}", title="File Upload")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": "File upload failed."}
 
 
 def get_file_base64(file_url: str) -> tuple[str, str]:

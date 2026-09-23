@@ -210,6 +210,15 @@ const logoSvg = inject('logoSvg')
 const voiceOutput = useVoiceOutput()
 const isExporting = ref(false)
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
 const props = defineProps({
   message: {
     type: Object,
@@ -291,10 +300,10 @@ const renderedContent = computed(() => {
       return renderMarkdown(content)
     } catch (error) {
       console.error('Markdown rendering error:', error)
-      return props.message.content
+      return escapeHtml(props.message.content || '').replace(/\n/g, '<br>')
     }
   }
-  return props.message.content
+  return escapeHtml(props.message.content || '').replace(/\n/g, '<br>')
 })
 
 // Detect "fully blank bubble" — content strips to nothing AND no visual section

@@ -71,51 +71,32 @@ def extract_content(file_url: str) -> dict:
 
 
 def _get_file_doc(file_url: str):
-	"""Look up a Frappe File document by file_url, handling URL encoding mismatches.
+	"""Resolve a Frappe File by exact URL and enforce read permission.
 
-	The LLM may pass a URL with literal spaces while the database stores it with
-	%20 encoding (or vice versa). This tries multiple URL variants to find the file.
-
-	Args:
-		file_url: File URL as provided by the LLM tool call.
-
-	Returns:
-		Frappe File document.
-
-	Raises:
-		frappe.DoesNotExistError: If no matching file is found.
+	URL-encoding variants are accepted, but filename-only fallback is
+	intentionally forbidden because two unrelated files can share a filename.
 	"""
-	# Strip domain prefix if LLM passed a full URL (e.g., "http://site/private/files/...")
-	# Frappe stores file_url as a path like "/private/files/..." or "/files/..."
-	if file_url.startswith(("http://", "https://")):
-		from urllib.parse import urlparse
+	from urllib.parse import quote, unquote, urlparse
 
+	if file_url.startswith(("http://", "https://")):
 		file_url = urlparse(file_url).path
 
-	# Build a list of URL variants to try
 	decoded_url = unquote(file_url)
-	# Encode only the filename portion (after the last /), preserving the path structure
-	parts = decoded_url.rsplit("/", 1)
-	if len(parts) == 2:
-		encoded_url = parts[0] + "/" + quote(parts[1])
-	else:
-		encoded_url = quote(decoded_url)
-
-	urls_to_try = []
-	seen = set()
-	for url in (file_url, decoded_url, encoded_url):
-		if url not in seen:
-			seen.add(url)
-			urls_to_try.append(url)
+	encoded_url = quote(decoded_url, safe="/")
+	urls_to_try = tuple(dict.fromkeys((file_url, decoded_url, encoded_url)))
 
 	for url in urls_to_try:
-		if frappe.db.exists("File", {"file_url": url}):
-			return frappe.get_doc("File", {"file_url": url})
+		file_name = frappe.db.get_value("File", {"file_url": url}, "name")
+		if not file_name:
+			continue
 
-	# Last resort: try matching by file_name (the filename part only)
-	file_name = unquote(file_url.split("/")[-1])
-	if frappe.db.exists("File", {"file_name": file_name}):
-		return frappe.get_doc("File", {"file_name": file_name})
+		file_doc = frappe.get_doc("File", file_name)
+		if not file_doc.has_permission("read"):
+			frappe.throw(
+				"You do not have permission to access this file.",
+				frappe.PermissionError,
+			)
+		return file_doc
 
 	frappe.throw(
 		f"File not found for URL: {file_url}",

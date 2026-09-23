@@ -35,6 +35,21 @@ from ai_chatbot.tools.crud import (
 _UNDO_PREFIX = "chatbot_undo:"
 _UNDO_TTL = 300  # 5 minutes
 
+_ACTION_FAILED = "The requested action could not be completed."
+
+
+def _user_facing_error(error: Exception) -> str:
+	if isinstance(
+		error,
+		(
+			frappe.PermissionError,
+			frappe.ValidationError,
+			frappe.DoesNotExistError,
+		),
+	):
+		return str(error)
+	return _ACTION_FAILED
+
 
 @frappe.whitelist()
 def confirm_action(
@@ -213,7 +228,7 @@ def confirm_action(
 
 	except Exception as e:
 		log_error(f"CRUD confirm_action error: {e!s}", title="CRUD Confirm")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 @frappe.whitelist()
@@ -239,7 +254,7 @@ def cancel_action(confirmation_id: str) -> dict:
 
 	except Exception as e:
 		log_error(f"CRUD cancel_action error: {e!s}", title="CRUD Cancel")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 @frappe.whitelist()
@@ -269,6 +284,12 @@ def undo_action(undo_token: str) -> dict:
 			}
 
 		metadata = json.loads(data) if isinstance(data, str) else data
+		if metadata.get("user") != frappe.session.user:
+			frappe.throw(
+				"You do not have permission to use this undo token.",
+				frappe.PermissionError,
+			)
+
 		action = metadata.get("action")
 		doctype = metadata.get("doctype")
 		name = metadata.get("name")
@@ -328,7 +349,7 @@ def undo_action(undo_token: str) -> dict:
 
 	except Exception as e:
 		log_error(f"CRUD undo_action error: {e!s}", title="CRUD Undo")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": _user_facing_error(e)}
 
 
 # ── Internal Helpers ─────────────────────────────────────────────────

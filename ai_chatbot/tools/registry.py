@@ -21,7 +21,14 @@ _TOOL_REGISTRY = {}
 _EXTRA_CATEGORIES = {}
 
 
-def register_tool(name, category, description, parameters=None, doctypes=None):
+def register_tool(
+	name,
+	category,
+	description,
+	parameters=None,
+	doctypes=None,
+	row_permission_safe=False,
+):
 	"""Decorator to register a tool function.
 
 	Usage:
@@ -45,6 +52,9 @@ def register_tool(name, category, description, parameters=None, doctypes=None):
 		description: Human-readable description for the LLM.
 		parameters: Dict of parameter definitions for OpenAI function calling schema.
 		doctypes: List of DocType names the tool accesses. Used for permission checks.
+		row_permission_safe: Set True only when the tool's own queries are known
+			to enforce Frappe row-level permissions. Direct Query Builder/raw SQL
+			analytics should keep the default False.
 	"""
 
 	def decorator(func):
@@ -54,11 +64,68 @@ def register_tool(name, category, description, parameters=None, doctypes=None):
 			"description": description,
 			"parameters": parameters or {},
 			"doctypes": doctypes or [],
+			"row_permission_safe": bool(row_permission_safe),
 			"function": func,
 		}
 		return func
 
 	return decorator
+
+
+def _is_privileged_tool_user(user: str | None = None) -> bool:
+	user = user or frappe.session.user
+	return user == "Administrator" or "System Manager" in frappe.get_roles(user)
+
+
+def _has_row_scope(doctype: str, user: str) -> bool:
+	"""Return True when Frappe would add row-level match conditions."""
+	cache = getattr(frappe.flags, "_ai_chatbot_row_scope_cache", None)
+	if cache is None:
+		cache = {}
+		frappe.flags._ai_chatbot_row_scope_cache = cache
+
+	key = (user, doctype)
+	if key not in cache:
+		from frappe.model.db_query import DatabaseQuery
+
+		cache[key] = bool(DatabaseQuery(doctype, user=user).build_match_conditions())
+	return cache[key]
+
+
+def _tool_access_error(tool_info: dict, user: str | None = None) -> dict | None:
+	"""Apply DocType and row-scope guards before a tool is exposed or executed."""
+	user = user or frappe.session.user
+	tool_doctypes = tool_info.get("doctypes", [])
+
+	for doctype in tool_doctypes:
+		if not frappe.has_permission(doctype, "read", user=user):
+			return {
+				"error": True,
+				"error_type": "permission_denied",
+				"message": f"You do not have permission to access {doctype}",
+				"suggestion": "Use only records and reports available to the current user.",
+			}
+
+	if (
+		tool_doctypes
+		and not tool_info.get("row_permission_safe")
+		and not _is_privileged_tool_user(user)
+	):
+		for doctype in tool_doctypes:
+			if _has_row_scope(doctype, user):
+				return {
+					"error": True,
+					"error_type": "row_scope_not_supported",
+					"message": (
+						f"This analytics tool is unavailable because your {doctype} "
+						"access is restricted to specific records."
+					),
+					"suggestion": (
+						"Use a permission-aware search/report path for this request."
+					),
+				}
+
+	return None
 
 
 def get_all_tools_schema():
@@ -83,14 +150,9 @@ def get_all_tools_schema():
 		if settings_field and not is_tool_category_enabled(settings_field):
 			continue
 
-		# Skip tools the user has no permission for
-		tool_doctypes = tool_info.get("doctypes", [])
-		if tool_doctypes:
-			has_perm = all(
-				frappe.has_permission(dt, "read", user=frappe.session.user) for dt in tool_doctypes
-			)
-			if not has_perm:
-				continue
+		# Skip tools that are not safe for the current user's permission scope.
+		if _tool_access_error(tool_info):
+			continue
 
 		tools.append(_build_schema(tool_info))
 
@@ -116,15 +178,9 @@ def execute_tool(tool_name: str, arguments: dict) -> dict:
 		log_tool_error(tool_name, "Tool not found", arguments)
 		return {"success": False, "error": f"Tool '{tool_name}' not found"}
 
-	# Permission check on declared doctypes
-	for dt in tool_info.get("doctypes", []):
-		if not frappe.has_permission(dt, "read", user=frappe.session.user):
-			return {
-				"error": True,
-				"error_type": "permission_denied",
-				"message": f"You do not have permission to access {dt}",
-				"suggestion": f"The user doesn't have access to {dt}. Inform them that they need the appropriate role/permission.",
-			}
+	# Re-check access at execution time; schemas can outlive permission changes.
+	if access_error := _tool_access_error(tool_info):
+		return access_error
 
 	conversation_id = getattr(frappe.flags, "current_conversation_id", None)
 	try:
@@ -238,14 +294,9 @@ def get_tools_by_categories(categories: set[str], extra_tool_names: set[str] | N
 		if settings_field and not is_tool_category_enabled(settings_field):
 			continue
 
-		# Skip tools the user has no permission for
-		tool_doctypes = tool_info.get("doctypes", [])
-		if tool_doctypes:
-			has_perm = all(
-				frappe.has_permission(dt, "read", user=frappe.session.user) for dt in tool_doctypes
-			)
-			if not has_perm:
-				continue
+		# Skip tools that are not safe for the current user's permission scope.
+		if _tool_access_error(tool_info):
+			continue
 
 		tools.append(_build_schema(tool_info))
 
@@ -320,9 +371,7 @@ def _ensure_tools_loaded():
 		import ai_chatbot.tools.finance.gl_analytics
 		import ai_chatbot.tools.finance.profitability
 		import ai_chatbot.tools.idp
-		import ai_chatbot.tools.operations.create
 		import ai_chatbot.tools.operations.search
-		import ai_chatbot.tools.operations.update
 		import ai_chatbot.tools.predictive.anomaly_detection
 		import ai_chatbot.tools.predictive.cash_flow_forecast
 		import ai_chatbot.tools.predictive.demand_forecast

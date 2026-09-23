@@ -22,11 +22,11 @@ def get_foundry_agents() -> dict:
 	try:
 		agents = frappe.get_all(
 			"Foundry Agent",
-			filters={"enabled": 1},
+			filters={"enabled": 1, "foundry_assistant_id": ["!=", ""]},
 			fields=["name", "description", "icon"],
 			order_by="creation",
 		)
 		return {"success": True, "agents": agents}
 	except Exception as e:
 		log_error(f"Error getting foundry agents: {e!s}", title="Foundry Agents API")
-		return {"success": False, "error": str(e)}
+		return {"success": False, "error": "Unable to load Foundry Agents."}
