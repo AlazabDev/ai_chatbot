@@ -131,13 +131,15 @@ fixtures = ["Foundry Agent"]
 # -----------
 # Permissions evaluated in scripted ways
 
-# permission_query_conditions = {
-# 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
-# }
-#
-# has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
-# }
+permission_query_conditions = {
+	"Chatbot Conversation": "ai_chatbot.core.permissions.conversation_query",
+	"Chatbot Message": "ai_chatbot.core.permissions.message_query",
+}
+
+has_permission = {
+	"Chatbot Conversation": "ai_chatbot.core.permissions.conversation_has_permission",
+	"Chatbot Message": "ai_chatbot.core.permissions.message_has_permission",
+}
 
 # Document Events
 # ---------------
