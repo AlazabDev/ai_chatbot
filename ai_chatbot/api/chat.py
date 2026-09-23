@@ -583,12 +583,10 @@ def generate_ai_response(conversation, provider, history, tools) -> dict:
 def delete_conversation(conversation_id: str) -> dict:
 	"""Delete a conversation and its messages"""
 	try:
-		conversation = frappe.get_doc("Chatbot Conversation", conversation_id)
-		if conversation.user != frappe.session.user:
-			frappe.throw("Unauthorized access to conversation")
+		conversation = _get_owned_conversation(conversation_id)
 
 		# Delete all messages
-		messages = frappe.get_all("Chatbot Message", filters={"conversation": conversation_id})
+		messages = frappe.get_list("Chatbot Message", filters={"conversation": conversation_id})
 		for msg in messages:
 			frappe.delete_doc("Chatbot Message", msg.name)
 
@@ -606,9 +604,7 @@ def delete_conversation(conversation_id: str) -> dict:
 def update_conversation_title(conversation_id: str, title: str) -> dict:
 	"""Update conversation title"""
 	try:
-		conversation = frappe.get_doc("Chatbot Conversation", conversation_id)
-		if conversation.user != frappe.session.user:
-			frappe.throw("Unauthorized access to conversation")
+		conversation = _get_owned_conversation(conversation_id)
 
 		conversation.title = title
 		conversation.updated_at = frappe.utils.now()
@@ -636,9 +632,7 @@ def set_conversation_language(conversation_id: str, language: str = "") -> dict:
 		dict with success status.
 	"""
 	try:
-		conversation = frappe.get_doc("Chatbot Conversation", conversation_id)
-		if conversation.user != frappe.session.user:
-			frappe.throw("Unauthorized access to conversation")
+		_get_owned_conversation(conversation_id)
 
 		from ai_chatbot.core.session_context import set_session_context
 
@@ -813,7 +807,7 @@ def search_conversations(query: str, limit: int = 20) -> dict:
 		like_pattern = f"%{query}%"
 
 		# Search by conversation title
-		title_matches = frappe.get_all(
+		title_matches = frappe.get_list(
 			"Chatbot Conversation",
 			filters={"user": user, "title": ["like", like_pattern]},
 			fields=["name", "title", "ai_provider", "status", "created_at", "updated_at", "message_count"],
@@ -822,7 +816,7 @@ def search_conversations(query: str, limit: int = 20) -> dict:
 		)
 
 		# Search by message content (get distinct conversation IDs)
-		message_conv_ids = frappe.get_all(
+		message_conv_ids = frappe.get_list(
 			"Chatbot Message",
 			filters={"content": ["like", like_pattern]},
 			fields=["conversation"],
@@ -834,7 +828,7 @@ def search_conversations(query: str, limit: int = 20) -> dict:
 		# Filter to user's conversations and fetch details
 		content_matches = []
 		if message_conv_names:
-			content_matches = frappe.get_all(
+			content_matches = frappe.get_list(
 				"Chatbot Conversation",
 				filters={"user": user, "name": ["in", message_conv_names]},
 				fields=[
@@ -890,7 +884,7 @@ def get_mention_values(mention_type: str, search_term: str = "", company: str | 
 			filters = {}
 			if search_term:
 				filters["name"] = ["like", f"%{search_term}%"]
-			companies = frappe.get_all(
+			companies = frappe.get_list(
 				"Company",
 				filters=filters,
 				pluck="name",
@@ -924,7 +918,7 @@ def get_mention_values(mention_type: str, search_term: str = "", company: str | 
 			if mention_type in ("cost_center", "department", "warehouse") and company:
 				filters["company"] = company
 
-			values = frappe.get_all(
+			values = frappe.get_list(
 				doctype,
 				filters=filters,
 				pluck="name",
@@ -1041,7 +1035,7 @@ def _get_accounting_dimensions(company: str | None = None, search_term: str = ""
 				if company and frappe.get_meta(doc_type).has_field("company"):
 					value_filters["company"] = company
 
-				values = frappe.get_all(
+				values = frappe.get_list(
 					doc_type,
 					filters=value_filters,
 					pluck="name",
