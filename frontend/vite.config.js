@@ -26,17 +26,20 @@ export default defineConfig({
   build: {
     outDir: '../ai_chatbot/public/frontend',
     emptyOutDir: true,
-    chunkSizeWarningLimit: 1200,
+    chunkSizeWarningLimit: 500,
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, 'index.html'),
       },
       output: {
-        manualChunks: {
-          'vue-vendor': ['vue', 'vue-router'],
-          'markdown': ['marked', 'highlight.js'],
-          'icons': ['lucide-vue-next'],
-          'echarts': ['echarts'],
+        manualChunks(id) {
+          // zrender has no dependency on ECharts, so splitting only this layer
+          // avoids Rollup circular-chunk warnings while keeping both chunks
+          // comfortably below the 500 kB production warning threshold.
+          if (id.includes('/node_modules/zrender/')) return 'zrender'
+          if (id.includes('/node_modules/echarts/')) return 'echarts'
+          if (id.includes('/node_modules/vue/') || id.includes('/node_modules/vue-router/')) return 'vue-vendor'
+          if (id.includes('/node_modules/lucide-vue-next/')) return 'icons'
         },
       },
     },
