@@ -86,6 +86,18 @@ def extract_document_data(file_id=None, target_doctype=None, company=None, outpu
 	if not target_doctype:
 		return {"error": "target_doctype is required (e.g., 'Sales Invoice', 'Purchase Invoice')"}
 
+	if not frappe.db.exists("DocType", target_doctype):
+		return {"error": f"Unknown DocType: {target_doctype}"}
+
+	if not (
+		frappe.has_permission(target_doctype, "read", user=frappe.session.user)
+		or frappe.has_permission(target_doctype, "create", user=frappe.session.user)
+	):
+		frappe.throw(
+			f"You do not have permission to access {target_doctype}.",
+			frappe.PermissionError,
+		)
+
 	# Resolve file_id alias to actual file_url
 	file_url = _resolve_file_id(file_id)
 	if not file_url:
@@ -410,6 +422,23 @@ def compare_document_with_record(file_id=None, doctype=None, docname=None, compa
 	if not docname:
 		return {"error": "docname is required"}
 
+	if not frappe.db.exists("DocType", doctype):
+		return {"error": f"Unknown DocType: {doctype}"}
+
+	if not frappe.db.exists(doctype, docname):
+		return {"error": f"{doctype} '{docname}' does not exist"}
+
+	if not frappe.has_permission(
+		doctype,
+		"read",
+		doc=docname,
+		user=frappe.session.user,
+	):
+		frappe.throw(
+			f"You do not have permission to read {doctype} '{docname}'.",
+			frappe.PermissionError,
+		)
+
 	# Resolve file_id alias to actual file_url
 	file_url = _resolve_file_id(file_id)
 	if not file_url:
@@ -441,27 +470,21 @@ def compare_document_with_record(file_id=None, doctype=None, docname=None, compa
 
 
 def _resolve_idp_company(company: str | None) -> str:
-	"""Resolve the Company for an IDP extraction call.
+	"""Resolve an exact or default Company without bypassing User Permissions."""
+	resolved = company if company and frappe.db.exists("Company", company) else get_default_company(None)
 
-	Unlike `get_default_company`, this helper does NOT fuzzy-LIKE-match an
-	explicit argument against the Company doctype. The LLM may pass a
-	`company` value that was derived from the document body (e.g., the
-	invoice recipient's name), and fuzzy-matching such a value can
-	silently pick an unrelated Company record.
+	if resolved and not frappe.has_permission(
+		"Company",
+		"read",
+		doc=resolved,
+		user=frappe.session.user,
+	):
+		frappe.throw(
+			f"You do not have permission to access Company '{resolved}'.",
+			frappe.PermissionError,
+		)
 
-	Policy:
-	- If an explicit `company` is given and exists as an exact Company
-	  record name, use it.
-	- Otherwise fall back to the user's session default via
-	  `get_default_company()` (with `None`), which consults the user
-	  default and then the global default.
-
-	Returns:
-		Company name string.
-	"""
-	if company and frappe.db.exists("Company", company):
-		return company
-	return get_default_company(None)
+	return resolved
 
 
 def _resolve_file_id(file_id: str) -> str | None:
