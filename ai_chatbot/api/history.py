@@ -52,7 +52,20 @@ def get_conversation_history(conversation_id: str) -> list[dict]:
 		file path. The alias→URL mapping is stored in frappe.flags.file_alias_registry
 		for resolution by tool functions.
 	"""
-	messages = frappe.get_all(
+	from ai_chatbot.core.permissions import conversation_has_permission
+
+	conversation = frappe.get_doc("Chatbot Conversation", conversation_id)
+	if not conversation_has_permission(
+		conversation,
+		user=frappe.session.user,
+		permission_type="read",
+	):
+		frappe.throw(
+			"You do not have permission to access this conversation.",
+			frappe.PermissionError,
+		)
+
+	messages = frappe.get_list(
 		"Chatbot Message",
 		filters={"conversation": conversation_id},
 		fields=["role", "content", "tool_calls", "tool_results", "attachments"],
