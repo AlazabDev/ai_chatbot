@@ -11,38 +11,43 @@ from ai_chatbot.core.config import get_company_currency
 
 
 def is_parent_company(company):
-	"""Check if a company has child companies.
-
-	Args:
-		company: Company name to check.
-
-	Returns:
-		bool: True if the company has descendants.
-	"""
-	if not company:
-		return False
-	try:
-		descendants = frappe.db.get_descendants("Company", company)
-		return bool(descendants)
-	except Exception:
-		return False
+	"""Return True when the user can read at least one child Company."""
+	return bool(get_child_companies(company))
 
 
 def get_child_companies(parent_company):
-	"""Get all descendant companies of a parent company.
-
-	Args:
-		parent_company: Parent company name.
-
-	Returns:
-		list[str]: List of child company names.
-	"""
+	"""Return only descendant Companies visible to the current user."""
 	if not parent_company:
 		return []
+
+	if not frappe.has_permission(
+		"Company",
+		"read",
+		doc=parent_company,
+		user=frappe.session.user,
+	):
+		frappe.throw(
+			"You do not have permission to access this Company.",
+			frappe.PermissionError,
+		)
+
 	try:
-		return frappe.db.get_descendants("Company", parent_company) or []
+		descendants = frappe.db.get_descendants("Company", parent_company) or []
 	except Exception:
 		return []
+
+	if not descendants:
+		return []
+
+	allowed = set(
+		frappe.get_list(
+			"Company",
+			filters={"name": ["in", descendants]},
+			pluck="name",
+			limit_page_length=0,
+		)
+	)
+	return [company for company in descendants if company in allowed]
 
 
 def get_consolidated_data(tool_func, parent_company, **kwargs):
@@ -90,8 +95,8 @@ def get_consolidated_data(tool_func, parent_company, **kwargs):
 			results.append(
 				{
 					"company": company,
-					"data": {"error": str(e)},
-					"currency": get_company_currency(company),
+					"data": {"error": "Unable to load data for this Company."},
+					"currency": None,
 					"exchange_rate": 1.0,
 				}
 			)
